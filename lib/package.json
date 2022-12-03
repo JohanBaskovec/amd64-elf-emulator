@@ -1,0 +1,31 @@
+{
+  "type": "commonjs",
+  "name": "amd64-elf64-emulator",
+  "main": "src/main.ts",
+  "version": "1.0.0",
+  "devDependencies": {
+    "@types/jest": "^29.2.3",
+    "@types/node": "^14.11.2",
+    "gts": "^3.1.1",
+    "jest": "^29.3.1",
+    "ts-loader": "^9.4.2",
+    "ts-node": "^10.9.1",
+    "tsc-watch": "^5.0.3",
+    "typescript": "^4.9.3",
+    "webpack": "^5.75.0",
+    "webpack-cli": "^5.0.0"
+  },
+  "dependencies": {
+    "@tsconfig/node18": "^1.0.1"
+  },
+  "scripts": {
+    "lint": "gts lint ./src/**/*.ts ./src/**/*.tsx",
+    "clean": "gts clean",
+    "compile": "tsc",
+    "fix": "gts fix ./src/**/*.ts ./src/**/*.tsx",
+    "prepare": "npm run compile",
+    "pretest": "npm run compile",
+    "posttest": "npm run lint",
+    "test": "jest"
+  }
+}

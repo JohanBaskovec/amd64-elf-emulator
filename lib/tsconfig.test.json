@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "noImplicitAny": true,
+    "strict": true,
+    "target": "ES2020",
+    "module": "CommonJS",
+    "forceConsistentCasingInFileNames": true,
+    "allowUmdGlobalAccess": false,
+    "moduleResolution": "node",
+    "lib": [
+      "ES2020",
+      "dom"
+    ]
+  },
+  "include": ["./**/*.test.ts"],
+  "exclude": ["node_modules", "build", "dist"]
+}
