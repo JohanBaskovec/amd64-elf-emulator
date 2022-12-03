@@ -29,4 +29,23 @@ test('parse MOV', () => {
     // mov rax, 1111111111111
     parseAndAssertMOV("48 b8 c7 11 62 b3 02 01 00 00", [{register: Register.RAX}, {bigInt: 1111111111111n}]);
 
+    // mov ax, 4
+    parseAndAssertMOV("66 b8 04 00", [{register: Register.AX}, {int: 4}]);
+    // mov bx, 4
+    parseAndAssertMOV("66 bb 04 00", [{register: Register.BX}, {int: 4}]);
+    // mov cx, 4
+    parseAndAssertMOV("66 b9 04 00", [{register: Register.CX}, {int: 4}]);
+    // mov dx, 4
+    parseAndAssertMOV("66 ba 04 00", [{register: Register.DX}, {int: 4}]);
+    // mov si, 4
+    parseAndAssertMOV("66 be 04 00", [{register: Register.SI}, {int: 4}]);
+    // mov di, 4
+    parseAndAssertMOV("66 bf 04 00", [{register: Register.DI}, {int: 4}]);
+    // mov r8w, 4
+    parseAndAssertMOV("66 41 b8 04 00", [{register: Register.R8W}, {int: 4}]);
+    // mov r9w, 4
+    parseAndAssertMOV("66 41 b9 04 00", [{register: Register.R9W}, {int: 4}]);
+    // mov r15w, 4
+    parseAndAssertMOV("66 41 bf 04 00", [{register: Register.R15W}, {int: 4}]);
+
 })

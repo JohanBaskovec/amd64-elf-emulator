@@ -374,7 +374,7 @@ export class InstructionParser {
 
     readOperandSizeOverridePrefix() {
         const byte = this.dv.getUint8(this.bytei);
-        if ((byte & 0x66) === 0x66) {
+        if (byte === 0x66) {
             this.instruction.operandSizeOverride = true;
             this.bytei++;
         }
@@ -382,7 +382,7 @@ export class InstructionParser {
 
     readRex() {
         let byte = this.dv.getUint8(this.bytei);
-        if (byte & rexMask) {
+        if (byte >= 0x40 && byte <= 0x4f) {
             this.instruction.rex = {
                 w: (byte & rexMaskW) >> 3,
                 r: (byte & rexMaskR) >> 2,
@@ -393,8 +393,11 @@ export class InstructionParser {
         }
     }
 
-    parseImmediate32Or64() {
-        if (this.instruction.rex && this.instruction.rex.w) {
+    parseImmediate1632Or64() {
+        if (this.instruction.operandSizeOverride) {
+            this.instruction.operands.push({int: this.dv.getUint16(this.bytei, true)});
+            this.bytei += 2;
+        } else if (this.instruction.rex && this.instruction.rex.w) {
             this.instruction.operands.push({bigInt: this.dv.getBigUint64(this.bytei, true)});
             this.bytei += 8;
         } else {
@@ -406,68 +409,6 @@ export class InstructionParser {
     parseImmediate8() {
         this.instruction.operands.push({int: this.dv.getUint8(this.bytei)});
         this.bytei += 1;
-    }
-
-    getRegisterInOpCode16(mask: number): Register {
-        const regValue = this.instruction.opCode ^ mask;
-        if (this.instruction.rex) {
-            if (this.instruction.rex.b) {
-                switch (regValue) {
-                    case 0:
-                        return Register.R8B;
-                    case 1:
-                        return Register.R9B;
-                    case 2:
-                        return Register.R10B;
-                    case 3:
-                        return Register.R11B;
-                    case 4:
-                        return Register.R12B;
-                    case 5:
-                        return Register.R13B;
-                    case 6:
-                        return Register.R14B;
-                    case 7:
-                        return Register.R15B;
-                }
-            } else {
-                switch (regValue) {
-                    case 0:
-                    case 1:
-                    case 2:
-                    case 3:
-                        throw new Error('Impossible opcode value');
-                    case 4:
-                        return Register.SPL;
-                    case 5:
-                        return Register.BPL;
-                    case 6:
-                        return Register.SIL;
-                    case 7:
-                        return Register.DIL;
-                }
-            }
-        } else {
-            switch (regValue) {
-                case 0:
-                    return Register.AL;
-                case 1:
-                    return Register.CL;
-                case 2:
-                    return Register.DL;
-                case 3:
-                    return Register.BL;
-                case 4:
-                    return Register.AH;
-                case 5:
-                    return Register.CH;
-                case 6:
-                    return Register.DH;
-                case 7:
-                    return Register.BH;
-            }
-        }
-        throw new Error('Impossible opcode value');
     }
 
     getRegisterInOpCode8(mask: number): Register {
@@ -532,8 +473,49 @@ export class InstructionParser {
         throw new Error('Impossible opcode value');
     }
 
-    getRegisterInOpCode32or64(mask: number): Register {
+    getRegisterInOpCode1632or64(mask: number): Register {
         const regValue = this.instruction.opCode ^ mask;
+        if (this.instruction.operandSizeOverride) {
+            if (this.instruction.rex && this.instruction.rex.b) {
+                switch (regValue) {
+                    case 0:
+                        return Register.R8W;
+                    case 1:
+                        return Register.R9W;
+                    case 2:
+                        return Register.R10W;
+                    case 3:
+                        return Register.R11W;
+                    case 4:
+                        return Register.R12W;
+                    case 5:
+                        return Register.R13W;
+                    case 6:
+                        return Register.R14W;
+                    case 7:
+                        return Register.R15W;
+                }
+            } else {
+                switch (regValue) {
+                    case 0:
+                        return Register.AX;
+                    case 1:
+                        return Register.CX;
+                    case 2:
+                        return Register.DX;
+                    case 3:
+                        return Register.BX;
+                    case 4:
+                        return Register.SP;
+                    case 5:
+                        return Register.BP;
+                    case 6:
+                        return Register.SI;
+                    case 7:
+                        return Register.DI;
+                }
+            }
+        }
         if (this.instruction.rex) {
             if (this.instruction.rex.w) {
                 if (this.instruction.rex.b) {
@@ -620,8 +602,8 @@ export class InstructionParser {
         throw new Error(`The opcode ${this.instruction.opCode.toString(16)} doesn't contain a register value!`);
     }
 
-    extratROperand32or64(mask: number) {
-        this.instruction.operands.push({register: this.getRegisterInOpCode32or64(mask)});
+    extratROperand1632or64(mask: number) {
+        this.instruction.operands.push({register: this.getRegisterInOpCode1632or64(mask)});
     }
 
     extratROperand8(mask: number) {
@@ -650,25 +632,18 @@ export class InstructionParser {
     parse() {
         const start = this.bytei;
 
-        this.readRex();
         this.readOperandSizeOverridePrefix();
+        this.readRex();
         this.readOpCode();
-
-
 
         // MOV reg16, imm16
         // MOV reg32, imm32
         // MOV reg64, imm64
         if ((this.instruction.opCode & 0xB8) === 0xB8) {
             this.instruction.type = InstructionType.MOV;
-            // 0xB8 has a "hidden" register operand in the opcode (it's not an operand in the doc, but corresponds to the "/r")
-            if (this.instruction.operandSizeOverride) {
-                //this.extratROperand16(0xB8);
-            } else {
-                this.extratROperand32or64(0xB8)
-            }
+            this.extratROperand1632or64(0xB8)
+            this.parseImmediate1632Or64();
 
-            this.parseImmediate32Or64();
         } else if ((this.instruction.opCode & 0xB0) === 0xB0) {
             this.instruction.type = InstructionType.MOV;
             this.extratROperand8(0xB0)
