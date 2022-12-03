@@ -23,29 +23,50 @@ function strToByteArray(str: string): number[] {
 }
 
 test('parse MOV', () => {
-    // mov    eax,0x1
-    parseAndAssertMOV([0xb8, 0x01, 0x00, 0x00, 0x00], [{register: Register.EAX}, {int: 1}]);
-
-    // mov rax, 1111111111111
+    // MOV qword to register
     parseAndAssertMOV("48 b8 c7 11 62 b3 02 01 00 00", [{register: Register.RAX}, {bigInt: 1111111111111n}]);
+    parseAndAssertMOV("48 bb c7 11 62 b3 02 01 00 00",[{register: Register.RBX}, {bigInt: 1111111111111n}]);
+    parseAndAssertMOV("48 b9 c7 11 62 b3 02 01 00 00",[{register: Register.RCX}, {bigInt: 1111111111111n}]);
+    parseAndAssertMOV("48 ba c7 11 62 b3 02 01 00 00",[{register: Register.RDX}, {bigInt: 1111111111111n}]);
+    parseAndAssertMOV("48 be c7 11 62 b3 02 01 00 00",[{register: Register.RSI}, {bigInt: 1111111111111n}]);
+    parseAndAssertMOV("48 bf c7 11 62 b3 02 01 00 00",[{register: Register.RDI}, {bigInt: 1111111111111n}]);
+    parseAndAssertMOV("48 bd c7 11 62 b3 02 01 00 00",[{register: Register.RBP}, {bigInt: 1111111111111n}]);
+    parseAndAssertMOV("48 bc c7 11 62 b3 02 01 00 00",[{register: Register.RSP}, {bigInt: 1111111111111n}]);
+    parseAndAssertMOV("49 b8 c7 11 62 b3 02 01 00 00",[{register: Register.R8}, {bigInt: 1111111111111n}]);
+    parseAndAssertMOV("49 b9 c7 11 62 b3 02 01 00 00",[{register: Register.R9}, {bigInt: 1111111111111n}]);
+    parseAndAssertMOV("49 ba c7 11 62 b3 02 01 00 00",[{register: Register.R10}, {bigInt: 1111111111111n}]);
+    parseAndAssertMOV("49 bb c7 11 62 b3 02 01 00 00",[{register: Register.R11}, {bigInt: 1111111111111n}]);
+    parseAndAssertMOV("49 bc c7 11 62 b3 02 01 00 00",[{register: Register.R12}, {bigInt: 1111111111111n}]);
+    parseAndAssertMOV("49 bd c7 11 62 b3 02 01 00 00",[{register: Register.R13}, {bigInt: 1111111111111n}]);
+    parseAndAssertMOV("49 be c7 11 62 b3 02 01 00 00",[{register: Register.R14}, {bigInt: 1111111111111n}]);
+    parseAndAssertMOV("49 bf c7 11 62 b3 02 01 00 00",[{register: Register.R15}, {bigInt: 1111111111111n}]);
 
-    // mov ax, 4
+    // MOV dword to register
+    parseAndAssertMOV("b8 01 00 00 00", [{register: Register.EAX}, {int: 1}]);
+    parseAndAssertMOV("bb 01 00 00 00", [{register: Register.EBX}, {int: 1}]);
+    parseAndAssertMOV("b9 01 00 00 00", [{register: Register.ECX}, {int: 1}]);
+    parseAndAssertMOV("ba 01 00 00 00", [{register: Register.EDX}, {int: 1}]);
+    parseAndAssertMOV("be 01 00 00 00", [{register: Register.ESI}, {int: 1}]);
+    parseAndAssertMOV("bf 01 00 00 00", [{register: Register.EDI}, {int: 1}]);
+    parseAndAssertMOV("bd 01 00 00 00", [{register: Register.EBP}, {int: 1}]);
+    parseAndAssertMOV("bc 01 00 00 00", [{register: Register.ESP}, {int: 1}]);
+    parseAndAssertMOV("41 b8 01 00 00 00", [{register: Register.R8D}, {int: 1}]);
+    parseAndAssertMOV("41 b9 01 00 00 00", [{register: Register.R9D}, {int: 1}]);
+    parseAndAssertMOV("41 ba 01 00 00 00", [{register: Register.R10D}, {int: 1}]);
+    parseAndAssertMOV("41 bb 01 00 00 00", [{register: Register.R11D}, {int: 1}]);
+    parseAndAssertMOV("41 bc 01 00 00 00", [{register: Register.R12D}, {int: 1}]);
+    parseAndAssertMOV("41 bd 01 00 00 00", [{register: Register.R13D}, {int: 1}]);
+    parseAndAssertMOV("41 be 01 00 00 00", [{register: Register.R14D}, {int: 1}]);
+    parseAndAssertMOV("41 bf 01 00 00 00", [{register: Register.R15D}, {int: 1}]);
+
+    // MOV word to register
     parseAndAssertMOV("66 b8 04 00", [{register: Register.AX}, {int: 4}]);
-    // mov bx, 4
     parseAndAssertMOV("66 bb 04 00", [{register: Register.BX}, {int: 4}]);
-    // mov cx, 4
     parseAndAssertMOV("66 b9 04 00", [{register: Register.CX}, {int: 4}]);
-    // mov dx, 4
     parseAndAssertMOV("66 ba 04 00", [{register: Register.DX}, {int: 4}]);
-    // mov si, 4
     parseAndAssertMOV("66 be 04 00", [{register: Register.SI}, {int: 4}]);
-    // mov di, 4
     parseAndAssertMOV("66 bf 04 00", [{register: Register.DI}, {int: 4}]);
-    // mov r8w, 4
     parseAndAssertMOV("66 41 b8 04 00", [{register: Register.R8W}, {int: 4}]);
-    // mov r9w, 4
     parseAndAssertMOV("66 41 b9 04 00", [{register: Register.R9W}, {int: 4}]);
-    // mov r15w, 4
     parseAndAssertMOV("66 41 bf 04 00", [{register: Register.R15W}, {int: 4}]);
-
 })
