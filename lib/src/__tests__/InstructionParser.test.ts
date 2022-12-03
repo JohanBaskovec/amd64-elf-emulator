@@ -69,4 +69,58 @@ test('parse MOV', () => {
     parseAndAssertMOV("66 41 b8 04 00", [{register: Register.R8W}, {int: 4}]);
     parseAndAssertMOV("66 41 b9 04 00", [{register: Register.R9W}, {int: 4}]);
     parseAndAssertMOV("66 41 bf 04 00", [{register: Register.R15W}, {int: 4}]);
-})
+
+    // MOV qword register to register
+    parseAndAssertMOV("48 89 c0", [{register: Register.RAX}, {register: Register.RAX}]);
+    parseAndAssertMOV("48 89 dc", [{register: Register.RSP}, {register: Register.RBX}]);
+    parseAndAssertMOV("49 89 c8", [{register: Register.R8}, {register: Register.RCX}]);
+    parseAndAssertMOV("49 89 d7", [{register: Register.R15}, {register: Register.RDX}]);
+    parseAndAssertMOV("48 89 c3", [{register: Register.RBX}, {register: Register.RAX}]);
+    parseAndAssertMOV("48 89 e1", [{register: Register.RCX}, {register: Register.RSP}]);
+    parseAndAssertMOV("4c 89 c2", [{register: Register.RDX}, {register: Register.R8}]);
+    parseAndAssertMOV("4c 89 fe", [{register: Register.RSI}, {register: Register.R15}]);
+
+    // MOV dword register to register
+    parseAndAssertMOV("89 c0", [{register: Register.EAX}, {register: Register.EAX}]);
+    parseAndAssertMOV("89 dc", [{register: Register.ESP}, {register: Register.EBX}]);
+    parseAndAssertMOV("41 89 c8", [{register: Register.R8D}, {register: Register.ECX}]);
+    parseAndAssertMOV("41 89 d7", [{register: Register.R15D}, {register: Register.EDX}]);
+    parseAndAssertMOV("89 c3", [{register: Register.EBX}, {register: Register.EAX}]);
+    parseAndAssertMOV("89 e1", [{register: Register.ECX}, {register: Register.ESP}]);
+    parseAndAssertMOV("44 89 c2", [{register: Register.EDX}, {register: Register.R8D}]);
+    parseAndAssertMOV("44 89 fe", [{register: Register.ESI}, {register: Register.R15D}]);
+
+    // MOV word register to register
+    parseAndAssertMOV("66 89 c0", [{register: Register.AX}, {register: Register.AX}]);
+    parseAndAssertMOV("66 89 dc", [{register: Register.SP}, {register: Register.BX}]);
+    parseAndAssertMOV("66 41 89 c8", [{register: Register.R8W}, {register: Register.CX}]);
+    parseAndAssertMOV("66 41 89 d7", [{register: Register.R15W}, {register: Register.DX}]);
+    parseAndAssertMOV("66 89 c3", [{register: Register.BX}, {register: Register.AX}]);
+    parseAndAssertMOV("66 89 e1", [{register: Register.CX}, {register: Register.SP}]);
+    parseAndAssertMOV("66 44 89 c2", [{register: Register.DX}, {register: Register.R8W}]);
+    parseAndAssertMOV("66 44 89 fe", [{register: Register.SI}, {register: Register.R15W}]);
+
+    // MOV byte register to register
+    parseAndAssertMOV("88 e4", [{register: Register.AH}, {register: Register.AH}]);
+    parseAndAssertMOV("88 f8", [{register: Register.AL}, {register: Register.BH}]);
+    parseAndAssertMOV("40 88 dc", [{register: Register.SPL}, {register: Register.BL}]);
+    parseAndAssertMOV("41 88 c0", [{register: Register.R8B}, {register: Register.AL}]);
+    parseAndAssertMOV("88 e9", [{register: Register.CL}, {register: Register.CH}]);
+    parseAndAssertMOV("88 cf", [{register: Register.BH}, {register: Register.CL}]);
+    parseAndAssertMOV("88 f3", [{register: Register.BL}, {register: Register.DH}]);
+    parseAndAssertMOV("88 d5", [{register: Register.CH}, {register: Register.DL}]);
+    parseAndAssertMOV("44 88 c1", [{register: Register.CL}, {register: Register.R8B}]);
+    parseAndAssertMOV("88 e6", [{register: Register.DH}, {register: Register.AH}]);
+    parseAndAssertMOV("40 88 e2", [{register: Register.DL}, {register: Register.SPL}]);
+    parseAndAssertMOV("41 88 e8", [{register: Register.R8B}, {register: Register.BPL}]);
+    parseAndAssertMOV("41 88 f7", [{register: Register.R15B}, {register: Register.SIL}]);
+});
+
+
+
+
+
+
+
+
+

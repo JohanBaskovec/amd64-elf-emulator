@@ -243,6 +243,27 @@ const SIBscaleMask = 0xc0;
 const SIBindexMask = 0x38;
 const SIBbaseMask = 0x07;
 
+enum OperandModRMOrder {
+    regFirstRmSecond,
+    rmFirstRegSecond,
+}
+
+const operandModRMOrderMap: { [opcode: number]: OperandModRMOrder } = {
+    0x89: OperandModRMOrder.rmFirstRegSecond,
+    0x88: OperandModRMOrder.rmFirstRegSecond,
+};
+
+function getOperandModRMOrder(opcode: number): OperandModRMOrder {
+    // Some operations encode their 2 operands in the ModRM byte,
+    // but the order depends on the opcode. For example, MOV opcode 0x89
+    // encodes its first operand in ModRM.r/m and its second one in ModRM.reg,
+    // but MOV opcdoe 0xB8 encodes its second operand in ModRM.r/m.
+    const order = operandModRMOrderMap[opcode];
+    if (order) {
+        return order;
+    }
+    return OperandModRMOrder.regFirstRmSecond;
+}
 
 export class InstructionParser {
 
@@ -294,14 +315,11 @@ export class InstructionParser {
         return register;
     }
 
-    parseModRM() {
-        const byte: number = this.dv.getUint8(this.bytei);
-        this.bytei++;
-        this.instruction.modRM = {
-            mod: (byte & 0xc0) >> 6,
-            reg: (byte & 0x38) >> 3,
-            rm: byte & 0x07,
-        };
+    parseRegBits() {
+        if (this.instruction.modRM === undefined) {
+            throw new Error('this.instruction.modRM is undefined');
+        }
+
         let regEReg: ModRMReg = this.instruction.modRM.reg;
         if (this.instruction.rex && this.instruction.rex.r) {
             // extend ModRM.reg with the R bit
@@ -312,6 +330,12 @@ export class InstructionParser {
         }
 
         this.instruction.operands.push({register: this.getModRmRegister(regEReg, this.instruction)});
+    }
+
+    parseRmBits() {
+        if (this.instruction.modRM === undefined) {
+            throw new Error('this.instruction.modRM is undefined');
+        }
 
         let rmExtended = this.instruction.modRM.rm;
         if (this.instruction.rex && this.instruction.rex.b) {
@@ -369,6 +393,25 @@ export class InstructionParser {
                         this.instruction.operands.push({effectiveAddrInRegister: register});
                 */
             }
+        }
+    }
+
+    parseModRM() {
+        const byte: number = this.dv.getUint8(this.bytei);
+        this.bytei++;
+        this.instruction.modRM = {
+            mod: (byte & 0xc0) >> 6,
+            reg: (byte & 0x38) >> 3,
+            rm: byte & 0x07,
+        };
+
+        const order = getOperandModRMOrder(this.instruction.opCode);
+        if (order === OperandModRMOrder.regFirstRmSecond) {
+            this.parseRegBits();
+            this.parseRmBits()
+        } else {
+            this.parseRmBits()
+            this.parseRegBits();
         }
     }
 
