@@ -1,13 +1,13 @@
 import {Process} from "./Process";
 import {BinaryFileReader} from "./BinaryFileReader";
 import {ELF64, ELF64Header, ProgramHeader, Type} from "./elf64";
+import {Emulator} from "./Emulator";
 
-export class Amd64Emulator {
-    onWrite: (line: string) => void = () => {};
-    onExit: (code: number) => void = () => {};
+export class Amd64Emulator extends Emulator {
     process?: Process;
 
     constructor() {
+        super();
     }
 
     parseExecutable(bytes: ArrayBuffer) {
@@ -78,20 +78,20 @@ export class Amd64Emulator {
             bytes,
         };
         return elf64;
+    }
 
+    onExit(code: number) {
+        super.onExit(code);
+        if (this.process) {
+            this.process.stop();
+        }
+        this.process = undefined;
     }
 
     runElf64Executable(bytes: ArrayBuffer) {
         const elf: ELF64 = this.parseExecutable(bytes);
-        const process = new Process(elf);
+        const process = new Process(elf, this);
         this.process = process;
-        process.onExit = (code: number) => {
-            this.onExit(code);
-            this.process = undefined;
-        }
-        process.onWrite = (line: string) => {
-            this.onWrite(line);
-        }
         process.run();
     }
 }

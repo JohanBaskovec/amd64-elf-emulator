@@ -1,5 +1,5 @@
-import {Instruction, InstructionType} from "./Instruction";
-import {Register, Register64, RegisterFamily} from "./amd64-architecture";
+import {Instruction, InstructionRaw, InstructionType} from "./Instruction";
+import {Register, RegisterFamily} from "./amd64-architecture";
 
 // table "ModRM.reg and .r/m Field Encodings" in AMD64 Architecture Programmer's Manual, Volume 3
 // columns "ModRM.reg" and "ModRM.r/m (mod = 11b)" (they are identical)
@@ -271,7 +271,7 @@ export class InstructionParser {
     bytei: number;
     lastInstr: number = 0;
 
-    instruction: Instruction = {
+    instruction: InstructionRaw = {
         type: InstructionType.none,
         operandSizeOverride: false,
         opCode: 0,
@@ -288,7 +288,7 @@ export class InstructionParser {
         throw new Error('Instruction not implemented: ' + this.instruction.opCode.toString(16));
     }
 
-    getModRmRegister(modrmreg: ModRMReg, instruction: Instruction): Register {
+    getModRmRegister(modrmreg: ModRMReg, instruction: InstructionRaw): Register {
         let registerType: RegisterType = RegisterType.integer;
         let width: SubRegisterWidth = SubRegisterWidth.dword;
         if (instruction.rex && instruction.rex.w) {
@@ -672,7 +672,7 @@ export class InstructionParser {
         //console.log('Found opcode ' + this.instruction.opCode.toString(16));
     }
 
-    parse() {
+    parse(): Instruction {
         const start = this.bytei;
 
         this.readOperandSizeOverridePrefix();
@@ -750,6 +750,10 @@ export class InstructionParser {
         }
 
         this.instruction.length = this.bytei - start;
-        return this.instruction;
+        return {
+            type: this.instruction.type,
+            length: this.instruction.length,
+            operands: this.instruction.operands,
+        };
     }
 }

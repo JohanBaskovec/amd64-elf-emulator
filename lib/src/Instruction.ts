@@ -32,7 +32,7 @@ export class Operand {
     int?: number;
 }
 
-export type Instruction = {
+export type InstructionRaw = {
     type: InstructionType;
     operandSizeOverride: boolean;
     opCode: number;
@@ -43,7 +43,30 @@ export type Instruction = {
     sib?: SIB;
 }
 
+export type Instruction = {
+    type: InstructionType;
+    operands: Operand[];
+    length: number;
+}
+
 export function instructionFormat(instruction: Instruction): object {
+    const r = {
+        type: InstructionType[instruction.type],
+        operands: instruction.operands.map(operand => {
+            return {
+                address: operand.address ? operand.address.toString(16): undefined,
+                register: operand.register ? Register[operand.register] : undefined,
+                effectiveAddrInRegister: operand.effectiveAddrInRegister ? Register[operand.effectiveAddrInRegister] : undefined,
+                bigInt: operand.bigInt ? operand.bigInt : undefined,
+                int: operand.int ? operand.int:  undefined,
+            }
+        }),
+        length: instruction.length,
+    };
+    return r;
+}
+
+export function instructionRawFormat(instruction: InstructionRaw): object {
     const r = {
         type: InstructionType[instruction.type],
         operandSizeOverride: instruction.operandSizeOverride,

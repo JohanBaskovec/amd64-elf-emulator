@@ -31,8 +31,8 @@ function run() {
       const content: ArrayBuffer = await res.arrayBuffer();
       const vm = new Amd64Emulator();
       writeToConsole('$ ./hello_world');
-      vm.onWrite = (l) => writeToConsole(l);
-      vm.onExit = (code) => writeToConsole('Process finished with code ' + code);
+      vm.addWriteSystemCallListener((l: string) => writeToConsole(l));
+      vm.addExitSystemCallListener((code) => writeToConsole('Process finished with code ' + code));
       vm.runElf64Executable(content);
     }
   }
