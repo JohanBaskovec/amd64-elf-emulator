@@ -25,21 +25,21 @@ function strToByteArray(str: string): number[] {
 test('parse MOV', () => {
     // MOV qword to register
     parseAndAssertMOV("48 b8 c7 11 62 b3 02 01 00 00", [{register: Register.RAX}, {bigInt: 1111111111111n}]);
-    parseAndAssertMOV("48 bb c7 11 62 b3 02 01 00 00",[{register: Register.RBX}, {bigInt: 1111111111111n}]);
-    parseAndAssertMOV("48 b9 c7 11 62 b3 02 01 00 00",[{register: Register.RCX}, {bigInt: 1111111111111n}]);
-    parseAndAssertMOV("48 ba c7 11 62 b3 02 01 00 00",[{register: Register.RDX}, {bigInt: 1111111111111n}]);
-    parseAndAssertMOV("48 be c7 11 62 b3 02 01 00 00",[{register: Register.RSI}, {bigInt: 1111111111111n}]);
-    parseAndAssertMOV("48 bf c7 11 62 b3 02 01 00 00",[{register: Register.RDI}, {bigInt: 1111111111111n}]);
-    parseAndAssertMOV("48 bd c7 11 62 b3 02 01 00 00",[{register: Register.RBP}, {bigInt: 1111111111111n}]);
-    parseAndAssertMOV("48 bc c7 11 62 b3 02 01 00 00",[{register: Register.RSP}, {bigInt: 1111111111111n}]);
-    parseAndAssertMOV("49 b8 c7 11 62 b3 02 01 00 00",[{register: Register.R8}, {bigInt: 1111111111111n}]);
-    parseAndAssertMOV("49 b9 c7 11 62 b3 02 01 00 00",[{register: Register.R9}, {bigInt: 1111111111111n}]);
-    parseAndAssertMOV("49 ba c7 11 62 b3 02 01 00 00",[{register: Register.R10}, {bigInt: 1111111111111n}]);
-    parseAndAssertMOV("49 bb c7 11 62 b3 02 01 00 00",[{register: Register.R11}, {bigInt: 1111111111111n}]);
-    parseAndAssertMOV("49 bc c7 11 62 b3 02 01 00 00",[{register: Register.R12}, {bigInt: 1111111111111n}]);
-    parseAndAssertMOV("49 bd c7 11 62 b3 02 01 00 00",[{register: Register.R13}, {bigInt: 1111111111111n}]);
-    parseAndAssertMOV("49 be c7 11 62 b3 02 01 00 00",[{register: Register.R14}, {bigInt: 1111111111111n}]);
-    parseAndAssertMOV("49 bf c7 11 62 b3 02 01 00 00",[{register: Register.R15}, {bigInt: 1111111111111n}]);
+    parseAndAssertMOV("48 bb c7 11 62 b3 02 01 00 00", [{register: Register.RBX}, {bigInt: 1111111111111n}]);
+    parseAndAssertMOV("48 b9 c7 11 62 b3 02 01 00 00", [{register: Register.RCX}, {bigInt: 1111111111111n}]);
+    parseAndAssertMOV("48 ba c7 11 62 b3 02 01 00 00", [{register: Register.RDX}, {bigInt: 1111111111111n}]);
+    parseAndAssertMOV("48 be c7 11 62 b3 02 01 00 00", [{register: Register.RSI}, {bigInt: 1111111111111n}]);
+    parseAndAssertMOV("48 bf c7 11 62 b3 02 01 00 00", [{register: Register.RDI}, {bigInt: 1111111111111n}]);
+    parseAndAssertMOV("48 bd c7 11 62 b3 02 01 00 00", [{register: Register.RBP}, {bigInt: 1111111111111n}]);
+    parseAndAssertMOV("48 bc c7 11 62 b3 02 01 00 00", [{register: Register.RSP}, {bigInt: 1111111111111n}]);
+    parseAndAssertMOV("49 b8 c7 11 62 b3 02 01 00 00", [{register: Register.R8}, {bigInt: 1111111111111n}]);
+    parseAndAssertMOV("49 b9 c7 11 62 b3 02 01 00 00", [{register: Register.R9}, {bigInt: 1111111111111n}]);
+    parseAndAssertMOV("49 ba c7 11 62 b3 02 01 00 00", [{register: Register.R10}, {bigInt: 1111111111111n}]);
+    parseAndAssertMOV("49 bb c7 11 62 b3 02 01 00 00", [{register: Register.R11}, {bigInt: 1111111111111n}]);
+    parseAndAssertMOV("49 bc c7 11 62 b3 02 01 00 00", [{register: Register.R12}, {bigInt: 1111111111111n}]);
+    parseAndAssertMOV("49 bd c7 11 62 b3 02 01 00 00", [{register: Register.R13}, {bigInt: 1111111111111n}]);
+    parseAndAssertMOV("49 be c7 11 62 b3 02 01 00 00", [{register: Register.R14}, {bigInt: 1111111111111n}]);
+    parseAndAssertMOV("49 bf c7 11 62 b3 02 01 00 00", [{register: Register.R15}, {bigInt: 1111111111111n}]);
 
     // MOV dword to register
     parseAndAssertMOV("b8 01 00 00 00", [{register: Register.EAX}, {int: 1}]);
@@ -114,6 +114,143 @@ test('parse MOV', () => {
     parseAndAssertMOV("40 88 e2", [{register: Register.DL}, {register: Register.SPL}]);
     parseAndAssertMOV("41 88 e8", [{register: Register.R8B}, {register: Register.BPL}]);
     parseAndAssertMOV("41 88 f7", [{register: Register.R15B}, {register: Register.SIL}]);
+
+    // mov rbx, [rsp]
+    parseAndAssertMOV("48 8b 1c 24", [
+        {
+            register: Register.RBX
+        }, {
+            effectiveAddr: {
+                base: Register.RSP,
+                displacement: 0,
+                index: null,
+                scaleFactor: 1,
+            }
+        }
+    ]);
+
+    // mov rax, [rsi]
+    parseAndAssertMOV("48 8b 06", [
+        {
+            register: Register.RAX
+        }, {
+            effectiveAddr: {
+                base: Register.RSI,
+                displacement: 0,
+                index: null,
+                scaleFactor: 1,
+            }
+        }
+    ]);
+
+    parseAndAssertMOV("48 8b 4c 24 02", [
+        {
+            register: Register.RCX
+        }, {
+            effectiveAddr: {
+                base: Register.RSP,
+                displacement: 2,
+                index: null,
+                scaleFactor: 1,
+            }
+        }
+    ]);
+    parseAndAssertMOV("48 8b 54 5c 08", [
+        {
+            register: Register.RDX
+        },
+        {
+            effectiveAddr: {
+                base: Register.RSP,
+                displacement: 8,
+                index: Register.RBX,
+                scaleFactor: 2,
+            }
+        }
+    ]);
+
+    parseAndAssertMOV("4b 8b 14 fb", [
+        {
+            register: Register.RDX
+        },
+        {
+            effectiveAddr: {
+                base: Register.R11,
+                index: Register.R15,
+                scaleFactor: 8,
+                displacement: 0,
+            }
+        }
+    ]);
+
+    parseAndAssertMOV("49 8b 55 00", [
+        {
+            register: Register.RDX
+        },
+        {
+            effectiveAddr: {
+                base: Register.R13,
+                index: null,
+                scaleFactor: 1,
+                displacement: 0,
+            }
+        }
+    ]);
+
+    parseAndAssertMOV("49 8b 16", [
+        {
+            register: Register.RDX
+        },
+        {
+            effectiveAddr: {
+                base: Register.R14,
+                index: null,
+                scaleFactor: 1,
+                displacement: 0,
+            }
+        }
+    ]);
+
+    parseAndAssertMOV("4c 8b 46 14", [
+        {
+            register: Register.R8
+        },
+        {
+            effectiveAddr: {
+                base: Register.RSI,
+                index: null,
+                scaleFactor: 1,
+                displacement: 20,
+            }
+        }
+    ]);
+    parseAndAssertMOV("4c 8b a4 24 00 c2 eb 0b", [
+        {
+            register: Register.R12
+        },
+        {
+            effectiveAddr: {
+                base: Register.RSP,
+                index: null,
+                scaleFactor: 1,
+                displacement: 200000000,
+            }
+        }
+    ]);
+
+    parseAndAssertMOV("4f 8b 3c e6", [
+        {
+            register: Register.R15
+        },
+        {
+            effectiveAddr: {
+                base: Register.R14,
+                index: Register.R12,
+                scaleFactor: 8,
+                displacement: 0,
+            }
+        }
+    ]);
 });
 
 

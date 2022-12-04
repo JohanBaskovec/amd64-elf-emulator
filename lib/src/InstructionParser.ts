@@ -1,4 +1,4 @@
-import {Instruction, InstructionRaw, InstructionType} from "./Instruction";
+import {Instruction, InstructionRaw, InstructionType, Operand} from "./Instruction";
 import {Register, RegisterFamily} from "./amd64-architecture";
 
 // table "ModRM.reg and .r/m Field Encodings" in AMD64 Architecture Programmer's Manual, Volume 3
@@ -33,6 +33,7 @@ function canAddressHighByte(modrmreg: ModRMReg): boolean {
 
 enum ModRMrmMobNot11b {
     rAX, rCX, rDX, rBX, SIB, rBP, rSI, rDI,
+    r8, r9, r10, r11, SIB2, r13, r14, r15
 }
 
 const modRMrmMobNot11bToRegisterMap: { [key in ModRMrmMobNot11b]?: RegisterFamily } = {
@@ -44,6 +45,14 @@ const modRMrmMobNot11bToRegisterMap: { [key in ModRMrmMobNot11b]?: RegisterFamil
     [ModRMrmMobNot11b.rSI]: RegisterFamily.rSI,
     [ModRMrmMobNot11b.rDI]: RegisterFamily.rDI,
     [ModRMrmMobNot11b.SIB]: undefined,
+    [ModRMrmMobNot11b.r8]: RegisterFamily.r8,
+    [ModRMrmMobNot11b.r9]: RegisterFamily.r9,
+    [ModRMrmMobNot11b.r10]: RegisterFamily.r10,
+    [ModRMrmMobNot11b.r11]: RegisterFamily.r11,
+    [ModRMrmMobNot11b.SIB2]: undefined,
+    [ModRMrmMobNot11b.r13]: RegisterFamily.r13,
+    [ModRMrmMobNot11b.r14]: RegisterFamily.r14,
+    [ModRMrmMobNot11b.r15]: RegisterFamily.r15,
 }
 
 const sibScaleFactorMap: { [scale: number]: number } = {
@@ -265,6 +274,68 @@ function getOperandModRMOrder(opcode: number): OperandModRMOrder {
     return OperandModRMOrder.regFirstRmSecond;
 }
 
+const sibIndexRegs: { [n: number]: RegisterFamily | null } = {
+    0x00: RegisterFamily.rAX,
+    0x01: RegisterFamily.rCX,
+    0x02: RegisterFamily.rDX,
+    0x03: RegisterFamily.rBX,
+    0x04: null,
+    0x05: RegisterFamily.rBP,
+    0x06: RegisterFamily.rSI,
+    0x07: RegisterFamily.rDI,
+    0x08: RegisterFamily.r8,
+    0x09: RegisterFamily.r9,
+    0x0a: RegisterFamily.r10,
+    0x0b: RegisterFamily.r11,
+    0x0c: RegisterFamily.r12,
+    0x0d: RegisterFamily.r13,
+    0x0e: RegisterFamily.r14,
+    0x0f: RegisterFamily.r15,
+}
+
+function getSibIndexRegister(index: number, width: SubRegisterWidth): Register | null {
+    const regFamily = sibIndexRegs[index];
+    if (regFamily === null) {
+        return null;
+    }
+    const register = registerFamilyWidthMapping[regFamily][width];
+    if (register === undefined) {
+        throw new Error('Could not find a register');
+    }
+    return register;
+}
+
+function getSibBaseRegister(base: number, width: SubRegisterWidth, mod: number): Register | null {
+    if (mod === 0x05) {
+        return null;
+    }
+    const regFamily = sibBaseRegs[base];
+    const register = registerFamilyWidthMapping[regFamily][width];
+    if (register === undefined) {
+        throw new Error('Could not find a register');
+    }
+    return register;
+}
+
+const sibBaseRegs: { [n: number]: RegisterFamily } = {
+    0x00: RegisterFamily.rAX,
+    0x01: RegisterFamily.rCX,
+    0x02: RegisterFamily.rDX,
+    0x03: RegisterFamily.rBX,
+    0x04: RegisterFamily.rSP,
+    0x05: RegisterFamily.rBP,
+    0x06: RegisterFamily.rSI,
+    0x07: RegisterFamily.rDI,
+    0x08: RegisterFamily.r8,
+    0x09: RegisterFamily.r9,
+    0x0a: RegisterFamily.r10,
+    0x0b: RegisterFamily.r11,
+    0x0c: RegisterFamily.r12,
+    0x0d: RegisterFamily.r13,
+    0x0e: RegisterFamily.r14,
+    0x0f: RegisterFamily.r15,
+}
+
 export class InstructionParser {
 
     dv: DataView;
@@ -332,6 +403,21 @@ export class InstructionParser {
         this.instruction.operands.push({register: this.getModRmRegister(regEReg, this.instruction)});
     }
 
+    parseDisplacement(mod: number): number {
+        if (mod !== 0x00) {
+            if (mod === 0x01) {
+                return this.getNextImmediate8();
+            }
+            if (mod === 0x02) {
+                return this.getNextImmediate32();
+            }
+            if (mod === 0x03) {
+                throw new Error('Invalid modRM mod value 0x03!');
+            }
+        }
+        return 0;
+    }
+
     parseRmBits() {
         if (this.instruction.modRM === undefined) {
             throw new Error('this.instruction.modRM is undefined');
@@ -356,8 +442,14 @@ export class InstructionParser {
             if (ModRMrmMobNot11b[rmModNot11b] === undefined) {
                 throw new Error("Impossible value for modRM's r/m");
             }
+            let width: SubRegisterWidth = SubRegisterWidth.dword;
+            if (this.instruction.rex && this.instruction.rex.w) {
+                width = SubRegisterWidth.qword;
+            } else if (this.instruction.operandSizeOverride) {
+                width = SubRegisterWidth.word;
+            }
 
-            if (rmModNot11b === ModRMrmMobNot11b.SIB) {
+            if (rmModNot11b === ModRMrmMobNot11b.SIB || rmModNot11b === ModRMrmMobNot11b.SIB2) {
                 const sibByte: number = this.dv.getUint8(this.bytei)
                 this.bytei++;
                 this.instruction.sib = {
@@ -365,12 +457,12 @@ export class InstructionParser {
                     index: (sibByte & SIBindexMask) >> 3,
                     base: sibByte & SIBbaseMask,
                 }
-                let scaleExtended = this.instruction.sib.scale;
-                let baseExtended = this.instruction.sib.scale;
+                let indexExtended = this.instruction.sib.index;
+                let baseExtended = this.instruction.sib.base;
                 if (this.instruction.rex) {
                     if (this.instruction.rex.x) {
                         // extend SIB.scale with the X bit
-                        scaleExtended = scaleExtended | (this.instruction.rex.b << 3);
+                        indexExtended = indexExtended | (this.instruction.rex.x << 3);
                     }
                     if (this.instruction.rex.b) {
                         // extend SIB.scale with the B bit
@@ -378,20 +470,37 @@ export class InstructionParser {
                     }
                 }
 
+                const baseReg: Register | null = getSibBaseRegister(baseExtended, width, this.instruction.modRM.mod);
+                const indexReg: Register | null = getSibIndexRegister(indexExtended, width);
                 const scaleFactor = sibScaleFactorMap[this.instruction.sib.scale];
+                const operand: Operand = {
+                    effectiveAddr: {
+                        base: baseReg,
+                        index: indexReg,
+                        scaleFactor,
+                        displacement: this.parseDisplacement(this.instruction.modRM.mod),
+                    }
+                };
+                this.instruction.operands.push(operand);
 
             } else {
                 const registerFamily = modRMrmMobNot11bToRegisterMap[rmModNot11b];
-                throw new Error('mod != 11 not implemented!');
-                /*
-                        let width = 32;
-
-                        if (this.instruction.rex && this.instruction.rex.w) {
-                          width = 64;
-                        }
-                        const register = registerFamilyWidthMapping[registerFamily][width];
-                        this.instruction.operands.push({effectiveAddrInRegister: register});
-                */
+                if (registerFamily === undefined) {
+                    throw new Error('registerFamily is undefined, should never happen');
+                }
+                const register = registerFamilyWidthMapping[registerFamily][width];
+                if (register == null) {
+                    throw new Error('register is undefined, should never happen');
+                }
+                const operand: Operand = {
+                    effectiveAddr: {
+                        base: register,
+                        index: null,
+                        scaleFactor: 1,
+                        displacement: this.parseDisplacement(this.instruction.modRM.mod),
+                    }
+                };
+                this.instruction.operands.push(operand);
             }
         }
     }
@@ -436,7 +545,13 @@ export class InstructionParser {
         }
     }
 
-    parseImmediate1632Or64() {
+    getNextImmediate32(): number {
+        const imm = this.dv.getUint32(this.bytei, true);
+        this.bytei += 4;
+        return imm;
+    }
+
+    parseImmediate1632Or64AsOperand(): void {
         if (this.instruction.operandSizeOverride) {
             this.instruction.operands.push({int: this.dv.getUint16(this.bytei, true)});
             this.bytei += 2;
@@ -449,9 +564,14 @@ export class InstructionParser {
         }
     }
 
-    parseImmediate8() {
-        this.instruction.operands.push({int: this.dv.getUint8(this.bytei)});
+    getNextImmediate8(): number {
+        const byte = this.dv.getUint8(this.bytei);
         this.bytei += 1;
+        return byte;
+    }
+
+    parseImmediate8AsOperand(): void {
+        this.instruction.operands.push({int: this.getNextImmediate8()});
     }
 
     getRegisterInOpCode8(mask: number): Register {
@@ -685,17 +805,16 @@ export class InstructionParser {
         if ((this.instruction.opCode & 0xB8) === 0xB8) {
             this.instruction.type = InstructionType.MOV;
             this.extratROperand1632or64(0xB8)
-            this.parseImmediate1632Or64();
+            this.parseImmediate1632Or64AsOperand();
 
         } else if ((this.instruction.opCode & 0xB0) === 0xB0) {
             this.instruction.type = InstructionType.MOV;
             this.extratROperand8(0xB0)
-            this.parseImmediate8();
+            this.parseImmediate8AsOperand();
         } else {
             switch (this.instruction.opCode) {
                 /* SYSCALL */
                 case 0x050f:
-                    //console.log('system call!');
                     this.instruction.type = InstructionType.SYSCALL;
                     break;
                 /* XOR */
@@ -730,7 +849,12 @@ export class InstructionParser {
                     this.parseModRM();
                     break;
                 case 0x8A:
+                    this.notImplemented();
+                    break;
                 case 0x8B:
+                    this.instruction.type = InstructionType.MOV;
+                    this.parseModRM();
+                    break;
                 case 0x8C:
                 case 0x8E:
                 case 0xA0:

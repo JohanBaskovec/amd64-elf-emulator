@@ -106,7 +106,7 @@ export class Cpu {
                     this.setRegisterValue(instruction.operands[0].register, res);
                 } else if (instruction.operands[0].address !== undefined) {
                     throw new Error('not impl address');
-                } else if (instruction.operands[0].effectiveAddrInRegister) {
+                } else if (instruction.operands[0].effectiveAddr) {
                     throw new Error('not impl effective addr');
                 }
 
