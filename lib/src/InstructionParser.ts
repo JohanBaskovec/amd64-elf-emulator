@@ -1,4 +1,4 @@
-import {Instruction, InstructionRaw, InstructionType, Operand} from "./Instruction";
+import {Instruction, InstructionRaw, InstructionType, Operand, OperationSize} from "./Instruction";
 import {Register, RegisterFamily} from "./amd64-architecture";
 
 // table "ModRM.reg and .r/m Field Encodings" in AMD64 Architecture Programmer's Manual, Volume 3
@@ -340,7 +340,6 @@ export class InstructionParser {
 
     dv: DataView;
     bytei: number;
-    lastInstr: number = 0;
 
     instruction: InstructionRaw = {
         type: InstructionType.none,
@@ -479,6 +478,7 @@ export class InstructionParser {
                         index: indexReg,
                         scaleFactor,
                         displacement: this.parseDisplacement(this.instruction.modRM.mod),
+                        dataSize: OperationSize.dword,
                     }
                 };
                 this.instruction.operands.push(operand);
@@ -498,6 +498,7 @@ export class InstructionParser {
                         index: null,
                         scaleFactor: 1,
                         displacement: this.parseDisplacement(this.instruction.modRM.mod),
+                        dataSize: OperationSize.dword,
                     }
                 };
                 this.instruction.operands.push(operand);
@@ -837,6 +838,7 @@ export class InstructionParser {
                 case 0x32:
                 case 0x33:
                 /* MOV */
+                // MOV reg/mem8, reg8
                 case 0x88:
                     this.instruction.type = InstructionType.MOV;
                     this.parseModRM();
@@ -851,6 +853,9 @@ export class InstructionParser {
                 case 0x8A:
                     this.notImplemented();
                     break;
+                // MOV reg16, reg/mem16
+                // MOV reg32, reg/mem32
+                // MOV reg64, reg/mem64
                 case 0x8B:
                     this.instruction.type = InstructionType.MOV;
                     this.parseModRM();
@@ -861,7 +866,6 @@ export class InstructionParser {
                 case 0xA1:
                 case 0xA2:
                 case 0xA3:
-                // case B8, B8: the register's code is added to it!
                 case 0xB0:
                 case 0xC6:
                 case 0xC7:

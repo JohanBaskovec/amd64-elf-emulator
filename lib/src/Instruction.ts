@@ -29,6 +29,7 @@ export type EffectiveAddress = {
     index: Register | null,
     displacement: number
     scaleFactor: number,
+    dataSize: OperationSize,
 }
 
 export class Operand {
@@ -38,6 +39,11 @@ export class Operand {
     bigInt?: bigint;
     int?: number;
 }
+
+export enum OperationSize {
+    qword, dword, word, byte
+}
+
 
 export type InstructionRaw = {
     type: InstructionType;

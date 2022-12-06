@@ -1,5 +1,5 @@
 import {Register, Register64, registerOffset, registerReverseMap, registerWidth} from "./amd64-architecture";
-import {Instruction, instructionFormat, InstructionType} from "./Instruction";
+import {EffectiveAddress, Instruction, instructionFormat, InstructionType, OperationSize} from "./Instruction";
 import {Emulator} from "./Emulator";
 
 export class Cpu {
@@ -36,6 +36,48 @@ export class Cpu {
         this.emulator = emulator;
     }
 
+    printRegister(register: Register): void {
+        const reg64: Register64 = registerReverseMap[register];
+        const dataView = this.registers[reg64];
+        const name: string = Register64[reg64];
+        const val64 = dataView.getBigUint64(0, true);
+        const val32 = dataView.getUint32(0, true);
+        const val16 = dataView.getUint16(0, true);
+        const val8 = dataView.getUint8(0);
+        let str = `Value of ${name}:
+u64: decimal = ${val64}, hex = ${val64.toString(16)}
+u32: decimal = ${val32}, hex = ${val32.toString(16)}
+u16: decimal = ${val16}, hex = ${val16.toString(16)}
+u8: decimal = ${val8}, hex = ${val8.toString(16)}
+Data in the DataView (big endian!):
+`;
+        let hexStr = '';
+        let binaryStr = '';
+        let bits = 0;
+        for (let i = 0; i < 8; i++) {
+            const byte = dataView.getUint8(i);
+            let hex = byte.toString(16);
+            if (hex.length === 1) {
+                hex = '0' + hex;
+            }
+            hexStr += hex + ' ';
+            for (let k = 128; k >= 1; k = k / 2) {
+                if (byte & k) {
+                    binaryStr += '1';
+                } else {
+                    binaryStr += '0';
+                }
+                bits++;
+                if (bits === 4) {
+                    binaryStr += ' ';
+                    bits = 0;
+                }
+            }
+        }
+        console.log(str + hexStr + "\n" + binaryStr);
+
+    }
+
     readValueRegister(register: Register): bigint {
         const reg64: Register64 = registerReverseMap[register];
         const regDataView: DataView = this.registers[reg64];
@@ -60,6 +102,8 @@ export class Cpu {
     }
 
     setRegisterValue(register: Register, value: bigint) {
+        //console.log('Before:');
+        //this.printRegister(register);
         const reg64: Register64 = registerReverseMap[register];
         const regDataView: DataView = this.registers[reg64];
         const off: number = registerOffset[register];
@@ -86,11 +130,43 @@ export class Cpu {
 
             }
         }
+
+        //console.log('After:');
+        //this.printRegister(register);
+    }
+
+    readUnsignedDataAtAddr(dataView: DataView, addr: number, width: OperationSize): bigint {
+        addr = addr - this.addrOffset;
+        switch (width) {
+            case OperationSize.byte:
+                return BigInt(dataView.getUint8(addr));
+            case OperationSize.word:
+                return BigInt(dataView.getUint16(addr, true));
+            case OperationSize.dword:
+                return BigInt(dataView.getUint32(addr, true));
+            case OperationSize.qword:
+                return dataView.getBigUint64(addr, true);
+        }
+    }
+
+    private writeUnsignedDataAtAddress(dataView: DataView, addr: number, value: bigint, operationSize: OperationSize) {
+        addr = addr - this.addrOffset;
+        switch (operationSize) {
+            case OperationSize.byte:
+                return dataView.setUint8(addr, Number(value));
+            case OperationSize.word:
+                return dataView.setUint16(addr, Number(value), true);
+            case OperationSize.dword:
+                return dataView.setUint32(addr, Number(value), true);
+            case OperationSize.qword:
+                return dataView.setBigUint64(addr, value, true);
+        }
+
     }
 
     execute(dataView: DataView, instruction: Instruction) {
         this.rip += instruction.length;
-        console.log(instructionFormat(instruction));
+        //console.log(instructionFormat(instruction));
         switch (instruction.type) {
             case InstructionType.XOR:
                 if (instruction.operands[1].register === undefined) {
@@ -116,17 +192,31 @@ export class Cpu {
                 let value: bigint = 0n;
                 if (instruction.operands[1].register !== undefined) {
                     value = this.readValueRegister(instruction.operands[1].register);
-                } else if (instruction.operands[1].bigInt !== undefined ) {
+                } else if (instruction.operands[1].bigInt !== undefined) {
                     value = instruction.operands[1].bigInt;
                 } else if (instruction.operands[1].int !== undefined) {
                     value = BigInt(instruction.operands[1].int);
-                }
-                if (instruction.operands[0].register === undefined) {
-                    throw new Error('MOV not to register not implemented');
-                }
-                // TODO: if moving a byte or word, we must preserve the lower bits
-                this.setRegisterValue(instruction.operands[0].register, value);
+                } else if (instruction.operands[1].effectiveAddr !== undefined) {
+                    const ea: EffectiveAddress = instruction.operands[1].effectiveAddr;
+                    const reg: Register | undefined = instruction.operands[0].register;
 
+                    if (reg === undefined) {
+                        throw new Error(`Second operand is an effective address, but the first operand isn't a register, that's impossible.`);
+                    }
+                    const addr = this.calculateAddress(ea);
+                    value = this.readUnsignedDataAtAddr(dataView, addr, instruction.operands[1].effectiveAddr.dataSize);
+                }
+                if (instruction.operands[0].register !== undefined) {
+                    this.setRegisterValue(instruction.operands[0].register, value);
+                } else if (instruction.operands[0].effectiveAddr !== undefined) {
+                    const reg = instruction.operands[1].register;
+                    if (reg === undefined) {
+                        throw new Error(`First operand is an effective address, but the second operand isn't a register, that's impossible.`);
+                    }
+                    const ea = instruction.operands[0].effectiveAddr;
+                    const addr = this.calculateAddress(ea);
+                    this.writeUnsignedDataAtAddress(dataView, addr, value, ea.dataSize);
+                }
                 break;
             case InstructionType.SYSCALL:
                 const code = this.readValueRegister(Register.RAX);
@@ -157,6 +247,22 @@ export class Cpu {
             default:
                 throw new Error('Unsupported instruction type: ' + instruction.type);
         }
+    }
+
+    private calculateAddress(ea: EffectiveAddress) {
+        let base = 0;
+        let index = 0;
+        let scaleFactor = ea.scaleFactor;
+        let displacement = ea.displacement;
+        if (ea.base !== null) {
+            // TODO: large address not supported
+            base = Number(this.readValueRegister(ea.base));
+        }
+        if (ea.index !== null) {
+            index = Number(this.readValueRegister(ea.index));
+        }
+        const addr = base + index * scaleFactor + displacement;
+        return addr;
     }
 
     getRip() {

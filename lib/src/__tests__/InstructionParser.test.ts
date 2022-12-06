@@ -1,5 +1,5 @@
 import {InstructionParser} from "../InstructionParser";
-import {Instruction, InstructionType, Operand} from "../Instruction";
+import {Instruction, InstructionType, Operand, OperationSize} from "../Instruction";
 import {Register} from "../amd64-architecture";
 
 function parseAndAssertMOV(bytes: number[] | string, operands: Operand[]) {
@@ -125,6 +125,7 @@ test('parse MOV', () => {
                 displacement: 0,
                 index: null,
                 scaleFactor: 1,
+                dataSize: OperationSize.qword,
             }
         }
     ]);
@@ -139,6 +140,7 @@ test('parse MOV', () => {
                 displacement: 0,
                 index: null,
                 scaleFactor: 1,
+                dataSize: OperationSize.qword,
             }
         }
     ]);
@@ -152,6 +154,7 @@ test('parse MOV', () => {
                 displacement: 2,
                 index: null,
                 scaleFactor: 1,
+                dataSize: OperationSize.qword,
             }
         }
     ]);
@@ -165,6 +168,7 @@ test('parse MOV', () => {
                 displacement: 8,
                 index: Register.RBX,
                 scaleFactor: 2,
+                dataSize: OperationSize.qword,
             }
         }
     ]);
@@ -179,6 +183,7 @@ test('parse MOV', () => {
                 index: Register.R15,
                 scaleFactor: 8,
                 displacement: 0,
+                dataSize: OperationSize.qword,
             }
         }
     ]);
@@ -193,6 +198,7 @@ test('parse MOV', () => {
                 index: null,
                 scaleFactor: 1,
                 displacement: 0,
+                dataSize: OperationSize.qword,
             }
         }
     ]);
@@ -207,6 +213,7 @@ test('parse MOV', () => {
                 index: null,
                 scaleFactor: 1,
                 displacement: 0,
+                dataSize: OperationSize.qword,
             }
         }
     ]);
@@ -221,6 +228,7 @@ test('parse MOV', () => {
                 index: null,
                 scaleFactor: 1,
                 displacement: 20,
+                dataSize: OperationSize.qword,
             }
         }
     ]);
@@ -234,6 +242,7 @@ test('parse MOV', () => {
                 index: null,
                 scaleFactor: 1,
                 displacement: 200000000,
+                dataSize: OperationSize.qword,
             }
         }
     ]);
@@ -248,8 +257,55 @@ test('parse MOV', () => {
                 index: Register.R12,
                 scaleFactor: 8,
                 displacement: 0,
+                dataSize: OperationSize.qword,
             }
         }
+    ]);
+
+    //  mov [rsp + 200000000], r12
+    parseAndAssertMOV("4c 89 a4 24 00 c2 eb 0b", [
+        {
+            effectiveAddr: {
+                base: Register.RSP,
+                index: null,
+                scaleFactor: 1,
+                displacement: 200000000,
+                dataSize: OperationSize.qword,
+            }
+        },
+        {
+            register: Register.R12
+        },
+    ]);
+
+    parseAndAssertMOV("49 89 0c b0", [
+        {
+            effectiveAddr: {
+                base: Register.R8,
+                index: Register.RSI,
+                scaleFactor: 4,
+                displacement: 0,
+                dataSize: OperationSize.qword,
+            }
+        },
+        {
+            register: Register.RCX
+        },
+    ]);
+
+    parseAndAssertMOV("4e 89 3c 3f", [
+        {
+            effectiveAddr: {
+                base: Register.RDI,
+                index: Register.R15,
+                scaleFactor: 1,
+                displacement: 0,
+                dataSize: OperationSize.qword,
+            }
+        },
+        {
+            register: Register.R15
+        },
     ]);
 });
 
