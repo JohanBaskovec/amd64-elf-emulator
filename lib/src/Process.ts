@@ -8,7 +8,6 @@ export class Process {
     private cpu: Cpu;
 
     private executable: ELF64;
-    private addrOffset = 0;
     private dv: DataView;
     private running: boolean = true;
     private emulator: Emulator;
@@ -18,7 +17,7 @@ export class Process {
         this.emulator = emulator;
         this.dv = new DataView(this.executable.bytes);
         const addrOffset = this.executable.programHeaders[0].vaddr;
-        const rip = this.executable.header.entry - this.addrOffset;
+        const rip = this.executable.header.entry - addrOffset;
         this.cpu = new Cpu(rip, addrOffset, this.emulator);
     }
 
