@@ -2,7 +2,7 @@ import {InstructionParser} from "../InstructionParser";
 import {Instruction, InstructionType, Operand, OperationSize} from "../Instruction";
 import {Register} from "../amd64-architecture";
 
-function parseAndAssertMOV(bytes: number[] | string, operands: Operand[]) {
+function parseAndAssert(bytes: number[] | string, operands: Operand[], type: InstructionType) {
     if (typeof bytes === "string") {
         bytes = strToByteArray(bytes);
     }
@@ -13,9 +13,13 @@ function parseAndAssertMOV(bytes: number[] | string, operands: Operand[]) {
 
     const parser = new InstructionParser(dataView, 0);
     const instruction: Instruction = parser.parse();
-    expect(instruction.type).toBe(InstructionType.MOV);
+    expect(instruction.type).toBe(type);
     expect(instruction.length).toBe(bytes.length);
     expect(instruction.operands).toEqual(operands);
+}
+
+function parseAndAssertMOV(bytes: number[] | string, operands: Operand[]) {
+    parseAndAssert(bytes, operands, InstructionType.MOV);
 }
 
 function strToByteArray(str: string): number[] {
@@ -309,7 +313,143 @@ test('parse MOV', () => {
     ]);
 });
 
+test('parse XOR', () => {
+    // xor rdi, 5000
+    // XOR reg/mem64, imm32
+    parseAndAssert("48 81 f7 88 13 00 00", [
 
+        {
+            register: Register.RDI
+        },
+        {
+            int: 0x1388,
+        },
+    ], InstructionType.XOR);
+
+    // xor al, 44
+    // XOR AL, imm8
+    parseAndAssert("34 2c", [{register: Register.AL}, {int: 44}], InstructionType.XOR);
+
+    // xor ax, 433
+    // XOR AX, imm16
+    parseAndAssert("66 35 b1 01", [{register: Register.AX}, {int: 433}], InstructionType.XOR);
+
+    // xor dword eax, 433
+    // XOR EAX, imm32
+    parseAndAssert("35 b1 01 00 00", [{register: Register.EAX}, {int: 433}], InstructionType.XOR);
+
+    // xor dword rax, 433
+    // XOR RAX, imm32
+    parseAndAssert("48 35 b1 01 00 00", [{register: Register.RAX}, {int: 433}], InstructionType.XOR);
+
+    // xor byte [datab], 4
+    // XOR reg/mem8, imm8
+    parseAndAssert("80 34 25 00 20 40 00 04", [{
+        effectiveAddr: {
+            base: null,
+            dataSize: OperationSize.byte,
+            displacement: 0x402000,
+            index: null,
+            scaleFactor: 1
+        }
+    }, {int: 4}], InstructionType.XOR);
+
+
+    // xor si, 435
+    // XOR reg/mem16, imm16
+    parseAndAssert("66 81 f6 b3 01", [{
+        register: Register.SI
+    }, {int: 435}], InstructionType.XOR);
+
+    // xor esi, 435
+    // XOR reg/mem32, imm32
+    parseAndAssert("81 f6 b3 01 00 00", [{
+        register: Register.ESI
+    }, {int: 435}], InstructionType.XOR);
+
+    // xor rsi, 435
+    // XOR reg/mem64, imm32
+    parseAndAssert("48 81 f6 b3 01 00 00", [{
+        register: Register.RSI
+    }, {int: 435}], InstructionType.XOR);
+
+    // xor ax, 44
+    // XOR reg/mem16, imm8
+    parseAndAssert("66 83 f0 2c", [{register: Register.AX}, {int: 44}], InstructionType.XOR);
+    // xor eax, 44
+    // XOR reg/mem32, imm8
+    parseAndAssert("83 f0 2c", [{register: Register.EAX}, {int: 44}], InstructionType.XOR);
+    // xor rax, 44
+    // XOR reg/mem64, imm8
+    parseAndAssert("48 83 f0 2c", [{register: Register.RAX}, {int: 44}], InstructionType.XOR);
+
+
+    // xor r8b, r9b
+    // XOR reg/mem8, reg8
+    parseAndAssert("45 30 c8", [{register: Register.R8B}, {register: Register.R9B}], InstructionType.XOR);
+
+    // xor r10w, r11w
+    // XOR reg/mem16, reg16
+    parseAndAssert("66 45 31 da", [{register: Register.R10W}, {register: Register.R11W}], InstructionType.XOR);
+
+    // xor r12d, r13d
+    // XOR reg/mem32, reg32
+    parseAndAssert("45 31 ec", [{register: Register.R12D}, {register: Register.R13D}], InstructionType.XOR);
+
+    // xor r14, r15
+    // XOR reg/mem64, reg64
+    parseAndAssert("4d 31 fe", [{register: Register.R14}, {register: Register.R15}], InstructionType.XOR);
+
+    // xor r8b, [datab]
+    // XOR reg8, reg/mem8
+    parseAndAssert("44 32 04 25 00 20 40 00", [{register: Register.R8B}, {
+        effectiveAddr: {
+            scaleFactor: 1,
+            index: null,
+            base: null,
+            dataSize: OperationSize.byte,
+            displacement: 0x402000
+        }
+    }], InstructionType.XOR);
+
+    // xor sp, [dataw]
+    // XOR reg16, reg/mem16
+    parseAndAssert("66 33 24 25 01 20 40 00", [{register: Register.SP}, {
+        effectiveAddr: {
+            scaleFactor: 1,
+            index: null,
+            base: null,
+            dataSize: OperationSize.word,
+            displacement: 0x402001
+        }
+    }], InstructionType.XOR);
+
+    // xor edi, [datad]
+    // XOR reg32, reg/mem32
+    parseAndAssert("33 3c 25 03 20 40 00", [{register: Register.EDI}, {
+        effectiveAddr: {
+            scaleFactor: 1,
+            index: null,
+            base: null,
+            dataSize: OperationSize.dword,
+            displacement: 0x402003
+        }
+    }], InstructionType.XOR);
+
+    // xor rcx, [dataq]
+    // XOR reg64, reg/mem64
+    parseAndAssert("48 33 0c 25 07 20 40 00", [{register: Register.RCX}, {
+        effectiveAddr: {
+            scaleFactor: 1,
+            index: null,
+            base: null,
+            dataSize: OperationSize.qword,
+            displacement: 0x402007
+        }
+    }], InstructionType.XOR);
+
+
+});
 
 
 

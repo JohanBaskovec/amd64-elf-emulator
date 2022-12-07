@@ -1,6 +1,21 @@
-import {Instruction, InstructionRaw, InstructionType, Operand, OperandModRMOrder, OperationSize} from "./Instruction";
+import {
+    Instruction,
+    InstructionRaw,
+    InstructionType,
+    ModRM,
+    Operand,
+    OperandModRMOrder,
+    OperationSize
+} from "./Instruction";
 import {Register, RegisterFamily} from "./amd64-architecture";
-import {initInstructionDefinitions, instructionDefinitions} from "./instructions-definitions";
+import {
+    initInstructionDefinitions,
+    InstructionDefinition,
+    instructionDefinitions,
+    instructionDefinitionsByOpCode,
+    OperandType,
+    operandTypeToWidth
+} from "./instructions-definitions";
 
 // table "ModRM.reg and .r/m Field Encodings" in AMD64 Architecture Programmer's Manual, Volume 3
 // columns "ModRM.reg" and "ModRM.r/m (mod = 11b)" (they are identical)
@@ -297,6 +312,9 @@ function getSibBaseRegister(base: number, width: SubRegisterWidth, mod: number):
         return null;
     }
     const regFamily = sibBaseRegs[base];
+    if (regFamily === RegisterFamily.rBP && mod === 0) {
+        return null;
+    }
     const register = registerFamilyWidthMapping[regFamily][width];
     if (register === undefined) {
         throw new Error('Could not find a register');
@@ -336,6 +354,7 @@ export class InstructionParser {
         length: 0,
         operands: [],
     };
+    instructionDefinition: InstructionDefinition | undefined = undefined;
 
     constructor(content: DataView, bytei: number) {
         this.dv = content;
@@ -348,14 +367,12 @@ export class InstructionParser {
     }
 
     getModRmRegister(modrmreg: ModRMReg, instruction: InstructionRaw): Register {
-
         let registerType: RegisterType = RegisterType.integer;
-        let width: SubRegisterWidth = SubRegisterWidth.dword;
-        if (instruction.rex && instruction.rex.w) {
-            width = SubRegisterWidth.qword;
-        } else if (instruction.operandSizeOverride) {
-            width = SubRegisterWidth.word;
+        if (this.instructionDefinition === undefined) {
+            throw new Error('instructionDefinition is undefined');
         }
+
+        let width: SubRegisterWidth;
         let m = opCodeToModRmRegRegisterMap;
         if (instruction.is8BitsInstruction) {
             if (canAddressHighByte(modrmreg) && instruction.rex === undefined) {
@@ -363,6 +380,22 @@ export class InstructionParser {
                 width = SubRegisterWidth.highByte;
             } else {
                 width = SubRegisterWidth.lowByte;
+            }
+        } else {
+            let operandWidth = this.getOperandSize(this.instructionDefinition, this.instruction.operands.length);
+            switch (operandWidth) {
+                case OperationSize.byte:
+                    width = SubRegisterWidth.lowByte;
+                    break;
+                case OperationSize.word:
+                    width = SubRegisterWidth.word;
+                    break;
+                case OperationSize.dword:
+                    width = SubRegisterWidth.dword;
+                    break;
+                case OperationSize.qword:
+                    width = SubRegisterWidth.qword;
+                    break;
             }
         }
         const register: Register | undefined = m[registerType][modrmreg][width];
@@ -389,22 +422,62 @@ export class InstructionParser {
         this.instruction.operands.push({register: this.getModRmRegister(regEReg, this.instruction)});
     }
 
-    parseDisplacement(mod: number): number {
-        if (mod !== 0x00) {
-            if (mod === 0x01) {
+    parseDisplacement(mod: number, base: number | null): number {
+        switch (mod) {
+            case 0:
+                if (base === 5) {
+                    return this.getNextImmediate32();
+                } else {
+                    return 0;
+                }
+            case 1:
                 return this.getNextImmediate8();
-            }
-            if (mod === 0x02) {
+            case 2:
                 return this.getNextImmediate32();
-            }
-            if (mod === 0x03) {
-                throw new Error('Invalid modRM mod value 0x03!');
-            }
+            default:
+                throw new Error('Invalid modRM mod value ' + mod);
         }
-        return 0;
     }
 
-    parseRmBits() {
+    getOperandSize(instructionDefinition: InstructionDefinition, operandIndex: number): OperationSize {
+        const uniq = instructionDefinition.opCode.uniq;
+        const allOps: InstructionDefinition[] | undefined = instructionDefinitionsByOpCode.get(uniq);
+        if (allOps === undefined) {
+            throw new Error(`Can't find instruction definitions with identifier ${uniq}`);
+        }
+        let maxWidth = OperationSize.byte;
+        for (const op of allOps) {
+            const operandType = op.mnemonic.operands[operandIndex];
+            const width = operandTypeToWidth[operandType];
+            if (width === undefined) {
+                throw new Error('No width for operand type ' + operandType);
+            }
+            if (width > maxWidth) {
+                maxWidth = width;
+            }
+        }
+        switch (maxWidth) {
+            case OperationSize.byte:
+            case OperationSize.word:
+                return maxWidth;
+            case OperationSize.dword:
+                if (this.instruction.operandSizeOverride) {
+                    return OperationSize.word;
+                } else {
+                    return OperationSize.dword;
+                }
+            case OperationSize.qword:
+                if (this.instruction.operandSizeOverride) {
+                    return OperationSize.word;
+                } else if (this.instruction.rex !== undefined && this.instruction.rex.w) {
+                    return OperationSize.qword;
+                } else {
+                    return OperationSize.dword;
+                }
+        }
+    }
+
+    parseRmBits(instructionDefinition: InstructionDefinition) {
         if (this.instruction.modRM === undefined) {
             throw new Error('this.instruction.modRM is undefined');
         }
@@ -415,6 +488,7 @@ export class InstructionParser {
             rmExtended = rmExtended | (this.instruction.rex.b << 3);
         }
 
+        const dataSize = this.getOperandSize(instructionDefinition, this.instruction.operands.length);
         let regERm: ModRMReg | undefined;
         if (this.instruction.modRM.mod === 0x03) {
             regERm = rmExtended;
@@ -464,8 +538,8 @@ export class InstructionParser {
                         base: baseReg,
                         index: indexReg,
                         scaleFactor,
-                        displacement: this.parseDisplacement(this.instruction.modRM.mod),
-                        dataSize: subRegisterWidthToWidth[width],
+                        displacement: this.parseDisplacement(this.instruction.modRM.mod, this.instruction.sib.base),
+                        dataSize
                     }
                 };
                 this.instruction.operands.push(operand);
@@ -484,8 +558,8 @@ export class InstructionParser {
                         base: register,
                         index: null,
                         scaleFactor: 1,
-                        displacement: this.parseDisplacement(this.instruction.modRM.mod),
-                        dataSize: subRegisterWidthToWidth[width],
+                        displacement: this.parseDisplacement(this.instruction.modRM.mod, null),
+                        dataSize,
                     }
                 };
                 this.instruction.operands.push(operand);
@@ -493,22 +567,14 @@ export class InstructionParser {
         }
     }
 
-    parseModRM(operandModRMOrder: OperandModRMOrder) {
+    readModRMByte(operandModRMOrder: OperandModRMOrder): ModRM {
         const byte: number = this.dv.getUint8(this.bytei);
         this.bytei++;
-        this.instruction.modRM = {
+        return {
             mod: (byte & 0xc0) >> 6,
             reg: (byte & 0x38) >> 3,
             rm: byte & 0x07,
         };
-
-        if (operandModRMOrder === OperandModRMOrder.regFirstRmSecond) {
-            this.parseRegBits();
-            this.parseRmBits()
-        } else {
-            this.parseRmBits()
-            this.parseRegBits();
-        }
     }
 
     readOperandSizeOverridePrefix() {
@@ -538,13 +604,21 @@ export class InstructionParser {
         return imm;
     }
 
-    parseImmediate1632Or64AsOperand(): void {
+    parseImmediate1632Or64AsOperand(maxImmediateSize: OperationSize): void {
         if (this.instruction.operandSizeOverride) {
             this.instruction.operands.push({int: this.dv.getUint16(this.bytei, true)});
             this.bytei += 2;
         } else if (this.instruction.rex && this.instruction.rex.w) {
-            this.instruction.operands.push({bigInt: this.dv.getBigUint64(this.bytei, true)});
-            this.bytei += 8;
+            if (maxImmediateSize === OperationSize.dword) {
+                this.instruction.operands.push({int: this.dv.getUint32(this.bytei, true)});
+                this.bytei += 4;
+            } else if (maxImmediateSize === OperationSize.word) {
+                this.instruction.operands.push({int: this.dv.getUint16(this.bytei, true)});
+                this.bytei += 2;
+            } else {
+                this.instruction.operands.push({bigInt: this.dv.getBigUint64(this.bytei, true)});
+                this.bytei += 8;
+            }
         } else {
             this.instruction.operands.push({int: this.dv.getUint32(this.bytei, true)});
             this.bytei += 4;
@@ -803,19 +877,95 @@ export class InstructionParser {
                 }
             }
             if (isTheInstruction) {
+                if (id.opCode.modRM) {
+                    const modRM = this.readModRMByte(id.operandModRMOrder);
+                    if (id.opCode.modRMExtension !== undefined) {
+                        if (modRM.reg !== id.opCode.modRMExtension) {
+                            this.bytei = instructionBeginI;
+                            continue;
+                        }
+                    }
+                    this.instruction.modRM = modRM;
+
+                }
+                this.instructionDefinition = id;
+                switch (id.mnemonic.operands[0]) {
+                    case OperandType.AL:
+                        this.instruction.operands.push({register: Register.AL});
+                        break;
+                    case OperandType.AX:
+                    case OperandType.EAX:
+                    case OperandType.RAX:
+                        const allOps: InstructionDefinition[] | undefined = instructionDefinitionsByOpCode.get(id.opCode.uniq);
+                        if (allOps === undefined) {
+                            switch (id.mnemonic.operands[0]) {
+                                case OperandType.AX:
+                                    this.instruction.operands.push({register: Register.AX});
+                                    break;
+                                case OperandType.EAX:
+                                    this.instruction.operands.push({register: Register.EAX});
+                                    break;
+                                case OperandType.RAX:
+                                    this.instruction.operands.push({register: Register.RAX});
+                                    break;
+                            }
+                            break;
+                        }
+                        let maxOperand: OperandType = OperandType.AX;
+                        for (let op of allOps) {
+                            if (op.mnemonic.operands[0] > maxOperand) {
+                                maxOperand = op.mnemonic.operands[0];
+                            }
+                        }
+                        if (maxOperand === OperandType.RAX) {
+                            if (this.instruction.rex !== undefined && this.instruction.rex.w) {
+                                this.instruction.operands.push({register: Register.RAX});
+                            } else if (this.instruction.operandSizeOverride) {
+                                this.instruction.operands.push({register: Register.AX});
+                            } else {
+                                this.instruction.operands.push({register: Register.EAX});
+                            }
+                        } else if (maxOperand === OperandType.EAX) {
+                            if (this.instruction.operandSizeOverride) {
+                                this.instruction.operands.push({register: Register.AX});
+                            } else {
+                                this.instruction.operands.push({register: Register.EAX});
+                            }
+                        } else if (maxOperand === OperandType.AX) {
+                            this.instruction.operands.push({register: Register.AX});
+                        }
+                        break
+                }
                 this.instruction.is8BitsInstruction = id.is8BitsInstruction;
                 if (id.opCode.modRM) {
-                    this.parseModRM(id.operandModRMOrder);
+                    if (id.operandModRMOrder === OperandModRMOrder.regFirstRmSecond) {
+                        if (id.opCode.modRMExtension === undefined) {
+                            this.parseRegBits();
+                        }
+                        this.parseRmBits(id);
+                    } else {
+                        this.parseRmBits(id)
+                        if (id.opCode.modRMExtension === undefined) {
+                            this.parseRegBits();
+                        }
+                    }
+                }
+                const allOps: InstructionDefinition[] | undefined = instructionDefinitionsByOpCode.get(id.opCode.uniq);
+                if (allOps === undefined) {
+                    throw new Error(`Can't find InstructionDefinition array for identifier ${id.opCode.uniq}.`);
                 }
                 if (id.opCode.immediateSize !== undefined) {
+                    let maxImmediateSize = OperationSize.byte;
+                    for (let op of allOps) {
+                        if (op.opCode.immediateSize !== undefined && op.opCode.immediateSize > maxImmediateSize) {
+                            maxImmediateSize = op.opCode.immediateSize;
+                        }
+                    }
                     if (id.opCode.immediateSize === OperationSize.byte) {
                         this.parseImmediate8AsOperand();
                     } else {
-                        this.parseImmediate1632Or64AsOperand();
+                        this.parseImmediate1632Or64AsOperand(maxImmediateSize);
                     }
-                }
-                if (id.opCode.modRMExtension) {
-                    throw new Error('ModRM extension (/0, /1, /2 etc.) not implemented.');
                 }
                 break;
             } else {

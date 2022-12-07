@@ -94,7 +94,15 @@ test('MOV memory to register', () => {
 
     cpu.execute(dv, {
         type: InstructionType.MOV,
-        operands: [{register: Register.RAX}, {effectiveAddr: {scaleFactor: 1, displacement: 4, index: null, base: null, dataSize: OperationSize.dword}}],
+        operands: [{register: Register.RAX}, {
+            effectiveAddr: {
+                scaleFactor: 1,
+                displacement: 4,
+                index: null,
+                base: null,
+                dataSize: OperationSize.dword
+            }
+        }],
         length: 5
     });
 
@@ -103,7 +111,15 @@ test('MOV memory to register', () => {
     dv.setBigUint64(12, maxUint64, true);
     cpu.execute(dv, {
         type: InstructionType.MOV,
-        operands: [{register: Register.RAX}, {effectiveAddr: {scaleFactor: 1, displacement: 12, index: null, base: null, dataSize: OperationSize.qword}}],
+        operands: [{register: Register.RAX}, {
+            effectiveAddr: {
+                scaleFactor: 1,
+                displacement: 12,
+                index: null,
+                base: null,
+                dataSize: OperationSize.qword
+            }
+        }],
         length: 5
     });
 
@@ -113,7 +129,15 @@ test('MOV memory to register', () => {
     dv.setUint32(20, 0xffff0000, true);
     cpu.execute(dv, {
         type: InstructionType.MOV,
-        operands: [{register: Register.RAX}, {effectiveAddr: {scaleFactor: 1, displacement: 20, index: null, base: null, dataSize: OperationSize.dword}}],
+        operands: [{register: Register.RAX}, {
+            effectiveAddr: {
+                scaleFactor: 1,
+                displacement: 20,
+                index: null,
+                base: null,
+                dataSize: OperationSize.dword
+            }
+        }],
         length: 5
     });
 
@@ -122,7 +146,15 @@ test('MOV memory to register', () => {
     // Set all bits To 1 again
     cpu.execute(dv, {
         type: InstructionType.MOV,
-        operands: [{register: Register.RAX}, {effectiveAddr: {scaleFactor: 1, displacement: 12, index: null, base: null, dataSize: OperationSize.qword}}],
+        operands: [{register: Register.RAX}, {
+            effectiveAddr: {
+                scaleFactor: 1,
+                displacement: 12,
+                index: null,
+                base: null,
+                dataSize: OperationSize.qword
+            }
+        }],
         length: 5
     });
 
@@ -131,7 +163,15 @@ test('MOV memory to register', () => {
     // Set bottom 16 bits to 0
     cpu.execute(dv, {
         type: InstructionType.MOV,
-        operands: [{register: Register.AX}, {effectiveAddr: {scaleFactor: 1, displacement: 0, index: null, base: null, dataSize: OperationSize.word}}],
+        operands: [{register: Register.AX}, {
+            effectiveAddr: {
+                scaleFactor: 1,
+                displacement: 0,
+                index: null,
+                base: null,
+                dataSize: OperationSize.word
+            }
+        }],
         length: 5
     });
     expect(cpu.readValueRegister(Register.RAX)).toBe(0x00_00_ff_ff_ff_ff_ff_ffn);
@@ -142,7 +182,15 @@ test('MOV memory to register', () => {
     // mov [rsp + 2 * r13 + 4], r9
     cpu.execute(dv, {
         type: InstructionType.MOV,
-        operands: [{effectiveAddr: {scaleFactor: 2, displacement: 4, index: Register.R13, base: Register.RSP, dataSize: OperationSize.qword}}, {register: Register.R9}],
+        operands: [{
+            effectiveAddr: {
+                scaleFactor: 2,
+                displacement: 4,
+                index: Register.R13,
+                base: Register.RSP,
+                dataSize: OperationSize.qword
+            }
+        }, {register: Register.R9}],
         length: 5
     });
     expect(cpu.readUnsignedDataAtAddr(dv, 12, OperationSize.qword)).toBe(42567n);
@@ -155,8 +203,46 @@ test('MOV register to memory', () => {
     cpu.setRegisterValue(Register.RAX, 1000n);
     cpu.execute(dv, {
         type: InstructionType.MOV,
-        operands: [{effectiveAddr: {scaleFactor: 1, displacement: 0, index: null, base: null, dataSize: OperationSize.qword}}, {register: Register.RAX}],
+        operands: [{
+            effectiveAddr: {
+                scaleFactor: 1,
+                displacement: 0,
+                index: null,
+                base: null,
+                dataSize: OperationSize.qword
+            }
+        }, {register: Register.RAX}],
         length: 5
     });
     expect(cpu.readUnsignedDataAtAddr(dv, 0, OperationSize.qword)).toBe(1000n);
+});
+
+
+test('ADD', () => {
+    const dv = new DataView(new ArrayBuffer(32));
+    const cpu = new Cpu(0, 0, new Emulator());
+    dv.setBigUint64(0, 100n, true);
+
+    cpu.setRegisterValue(Register.RAX, 1000n);
+    cpu.setRegisterValue(Register.R9, 44n);
+    cpu.execute(dv, {
+        type: InstructionType.ADD,
+        operands: [{register: Register.R9}, {register: Register.RAX}],
+        length: 5
+    });
+    expect(cpu.readValueRegister(Register.R9)).toBe(1044n);
+    cpu.execute(dv, {
+        type: InstructionType.ADD,
+        operands: [{
+            effectiveAddr: {
+                scaleFactor: 1,
+                displacement: 0,
+                index: null,
+                base: null,
+                dataSize: OperationSize.qword
+            }
+        }, {register: Register.R9}],
+        length: 5
+    });
+    expect(cpu.readUnsignedDataAtAddr(dv, 0, OperationSize.qword)).toBe(1144n);
 });

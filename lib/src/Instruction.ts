@@ -46,7 +46,7 @@ export class Operand {
 }
 
 export enum OperationSize {
-    qword, dword, word, byte
+    byte, word, dword, qword,
 }
 
 

@@ -1,5 +1,5 @@
 import {Register, Register64, registerOffset, registerReverseMap, registerWidth} from "./amd64-architecture";
-import {EffectiveAddress, Instruction, instructionFormat, InstructionType, OperationSize} from "./Instruction";
+import {EffectiveAddress, Instruction, instructionFormat, InstructionType, Operand, OperationSize} from "./Instruction";
 import {Emulator} from "./Emulator";
 
 export class Cpu {
@@ -164,6 +164,39 @@ Data in the DataView (big endian!):
 
     }
 
+    readValueFromOperand(dataView: DataView, operand: Operand): bigint {
+        let val = 0n;
+        if (operand.register !== undefined) {
+            val = this.readValueRegister(operand.register);
+        } else if (operand.bigInt !== undefined) {
+            val = operand.bigInt;
+        } else if (operand.int !== undefined) {
+            val = BigInt(operand.int);
+        } else if (operand.effectiveAddr !== undefined) {
+            const ea: EffectiveAddress = operand.effectiveAddr;
+            const addr = this.calculateAddress(ea);
+            val = this.readUnsignedDataAtAddr(dataView, addr, operand.effectiveAddr.dataSize);
+        }
+        return val;
+    }
+
+    writeValueInOperand(dataView: DataView, operand: Operand, value: bigint): void {
+        if (operand.register !== undefined) {
+            this.setRegisterValue(operand.register, value);
+        } else if (operand.effectiveAddr !== undefined) {
+            const ea = operand.effectiveAddr;
+            const addr = this.calculateAddress(ea);
+            this.writeUnsignedDataAtAddress(dataView, addr, value, ea.dataSize);
+        }
+    }
+
+    doAdd(dataView: DataView, instruction: Instruction) {
+        let value0: bigint = this.readValueFromOperand(dataView, instruction.operands[0]);
+        let value1: bigint = this.readValueFromOperand(dataView, instruction.operands[1]);
+
+        this.writeValueInOperand(dataView, instruction.operands[0], value0 + value1);
+    }
+
     execute(dataView: DataView, instruction: Instruction) {
         this.rip += instruction.length;
         //console.log(instructionFormat(instruction));
@@ -186,6 +219,10 @@ Data in the DataView (big endian!):
                     throw new Error('not impl effective addr');
                 }
 
+                break;
+
+            case InstructionType.ADD:
+                this.doAdd(dataView, instruction);
                 break;
 
             case InstructionType.MOV:

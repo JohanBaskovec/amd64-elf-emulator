@@ -12,6 +12,6 @@
       "dom"
     ]
   },
-  "files": ["src/main.ts", "src/instructions-definitions.ts"],
+  "files": ["src/x64_vm_cmd.ts"],
   "exclude": ["node_modules", "**/*.test.ts", "build", "dist"]
 }

@@ -74,7 +74,7 @@ XOR reg64, reg/mem64            33 /r       xor the contents of a 64-bit destina
 SYSCALL                         0F 05       Call operating system.
 `
 
-enum OperandType {
+export enum OperandType {
     reg8, reg16, reg32, reg64,
     regOrMem8, regOrMem16, regOrMem32, regOrMem64,
     imm8, imm16, imm32, imm64,
@@ -82,6 +82,30 @@ enum OperandType {
     moffset8, moffset16, moffset32, moffset64,
     segReg,
     reg16OrReg32OrReg64OrMem16
+}
+
+export const operandTypeToWidth: {[key in OperandType]?: OperationSize} = {
+    [OperandType.reg8]: OperationSize.byte,
+    [OperandType.reg16]: OperationSize.word,
+    [OperandType.reg32]: OperationSize.dword,
+    [OperandType.reg64]: OperationSize.qword,
+    [OperandType.regOrMem8]: OperationSize.byte,
+    [OperandType.regOrMem16]: OperationSize.word,
+    [OperandType.regOrMem32]: OperationSize.dword,
+    [OperandType.regOrMem64]: OperationSize.qword,
+    [OperandType.imm8]: OperationSize.byte,
+    [OperandType.imm16]: OperationSize.word,
+    [OperandType.imm32]: OperationSize.dword,
+    [OperandType.imm64]: OperationSize.qword,
+    [OperandType.AL]: OperationSize.byte,
+    [OperandType.AX]: OperationSize.word,
+    [OperandType.EAX]: OperationSize.dword,
+    [OperandType.RAX]: OperationSize.qword,
+    [OperandType.moffset8]: OperationSize.byte,
+    [OperandType.moffset16]: OperationSize.word,
+    [OperandType.moffset32]: OperationSize.dword,
+    [OperandType.moffset64]: OperationSize.qword,
+    [OperandType.reg16OrReg32OrReg64OrMem16]: OperationSize.qword,
 }
 
 export type InstructionDefinition = {
@@ -95,6 +119,7 @@ export type InstructionDefinition = {
     },
     opCode: {
         str: string,
+        uniq: string,
         bytes: number[],
         modRM: boolean,
         immediateSize?: OperationSize,
@@ -127,6 +152,8 @@ const operandStrToOperandType: {[operandTypeStr: string]: OperandType} = {
     'segReg': OperandType.segReg,
     'reg16/32/64/mem16': OperandType.reg16OrReg32OrReg64OrMem16
 }
+
+export const instructionDefinitionsByOpCode = new Map<string, InstructionDefinition[]>;
 
 function parseInstructionDefinitions() {
     const lines = rawInstructionDefinitions.split("\n");
@@ -166,6 +193,7 @@ function parseInstructionDefinitions() {
         let modRM = false;
         let registerCode: OperationSize | undefined;
         const opcodeBytes: number[] = [];
+        let uniq = "";
         for (const opcodePart of opCodeParts) {
             switch (opcodePart) {
                 case '/r':
@@ -186,34 +214,42 @@ function parseInstructionDefinitions() {
                 case '/0':
                     modRMExtension = 0;
                     modRM = true;
+                    uniq += opcodePart;
                     break;
                 case '/1':
                     modRMExtension = 1;
                     modRM = true;
+                    uniq += opcodePart;
                     break;
                 case '/2':
                     modRMExtension = 2;
                     modRM = true;
+                    uniq += opcodePart;
                     break;
                 case '/3':
                     modRMExtension = 3;
                     modRM = true;
+                    uniq += opcodePart;
                     break;
                 case '/4':
                     modRMExtension = 4;
                     modRM = true;
+                    uniq += opcodePart;
                     break;
                 case '/5':
                     modRMExtension = 5;
                     modRM = true;
+                    uniq += opcodePart;
                     break;
                 case '/6':
                     modRMExtension = 6;
                     modRM = true;
+                    uniq += opcodePart;
                     break;
                 case '/7':
                     modRMExtension = 7;
                     modRM = true;
+                    uniq += opcodePart;
                     break;
                 case '+rb':
                     registerCode = OperationSize.word;
@@ -231,6 +267,7 @@ function parseInstructionDefinitions() {
                     try {
                         const num = Number.parseInt(opcodePart, 16);
                         opcodeBytes.push(num);
+                        uniq += opcodePart;
                     } catch {
                         throw new Error(`Could not parse opcode byte ${opcodePart}.`);
                     }
@@ -253,13 +290,17 @@ function parseInstructionDefinitions() {
             ) {
                 operandModRMOrder = OperandModRMOrder.rmFirstRegSecond;
             }
+        }
+        if (operands.length >= 2) {
+            const op0Width = operandTypeToWidth[operands[0]];
+            const op1Width = operandTypeToWidth[operands[1]];
             // I'm not sure if this is always true
-            if (operands[0] === OperandType.regOrMem8) {
+            if (op0Width === OperationSize.byte && op1Width === OperationSize.byte) {
                 is8BitsInstruction = true;
             }
         }
 
-        instructionDefinitions.push({
+        const id: InstructionDefinition = {
             operandModRMOrder,
             is8BitsInstruction,
             mnemonic: {
@@ -268,6 +309,7 @@ function parseInstructionDefinitions() {
                 operands: operands,
             },
             opCode: {
+                uniq,
                 str: opcodeStr,
                 immediateSize: opcodeImmediate,
                 bytes: opcodeBytes,
@@ -276,7 +318,14 @@ function parseInstructionDefinitions() {
                 registerCode,
             },
             description,
-        })
+        };
+        const idArray = instructionDefinitionsByOpCode.get(uniq);
+        if (idArray !== undefined) {
+            idArray.push(id);
+        } else {
+            instructionDefinitionsByOpCode.set(uniq, [id]);
+        }
+        instructionDefinitions.push(id);
     }
     return instructionDefinitions;
 }
