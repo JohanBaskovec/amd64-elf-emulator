@@ -1,5 +1,6 @@
-import {Instruction, InstructionRaw, InstructionType, Operand, OperationSize} from "./Instruction";
+import {Instruction, InstructionRaw, InstructionType, Operand, OperandModRMOrder, OperationSize} from "./Instruction";
 import {Register, RegisterFamily} from "./amd64-architecture";
+import {initInstructionDefinitions, instructionDefinitions} from "./instructions-definitions";
 
 // table "ModRM.reg and .r/m Field Encodings" in AMD64 Architecture Programmer's Manual, Volume 3
 // columns "ModRM.reg" and "ModRM.r/m (mod = 11b)" (they are identical)
@@ -64,6 +65,14 @@ const sibScaleFactorMap: { [scale: number]: number } = {
 
 enum SubRegisterWidth {
     qword, dword, word, highByte, lowByte
+}
+
+const subRegisterWidthToWidth: { [key in SubRegisterWidth]: OperationSize } = {
+    [SubRegisterWidth.lowByte]: OperationSize.byte,
+    [SubRegisterWidth.highByte]: OperationSize.byte,
+    [SubRegisterWidth.word]: OperationSize.word,
+    [SubRegisterWidth.dword]: OperationSize.dword,
+    [SubRegisterWidth.qword]: OperationSize.qword,
 }
 
 type RegisterWidthMap = {
@@ -252,28 +261,6 @@ const SIBscaleMask = 0xc0;
 const SIBindexMask = 0x38;
 const SIBbaseMask = 0x07;
 
-enum OperandModRMOrder {
-    regFirstRmSecond,
-    rmFirstRegSecond,
-}
-
-const operandModRMOrderMap: { [opcode: number]: OperandModRMOrder } = {
-    0x89: OperandModRMOrder.rmFirstRegSecond,
-    0x88: OperandModRMOrder.rmFirstRegSecond,
-};
-
-function getOperandModRMOrder(opcode: number): OperandModRMOrder {
-    // Some operations encode their 2 operands in the ModRM byte,
-    // but the order depends on the opcode. For example, MOV opcode 0x89
-    // encodes its first operand in ModRM.r/m and its second one in ModRM.reg,
-    // but MOV opcdoe 0xB8 encodes its second operand in ModRM.r/m.
-    const order = operandModRMOrderMap[opcode];
-    if (order) {
-        return order;
-    }
-    return OperandModRMOrder.regFirstRmSecond;
-}
-
 const sibIndexRegs: { [n: number]: RegisterFamily | null } = {
     0x00: RegisterFamily.rAX,
     0x01: RegisterFamily.rCX,
@@ -343,6 +330,7 @@ export class InstructionParser {
 
     instruction: InstructionRaw = {
         type: InstructionType.none,
+        is8BitsInstruction: false,
         operandSizeOverride: false,
         opCode: 0,
         length: 0,
@@ -352,6 +340,7 @@ export class InstructionParser {
     constructor(content: DataView, bytei: number) {
         this.dv = content;
         this.bytei = bytei;
+        initInstructionDefinitions();
     }
 
     notImplemented() {
@@ -359,6 +348,7 @@ export class InstructionParser {
     }
 
     getModRmRegister(modrmreg: ModRMReg, instruction: InstructionRaw): Register {
+
         let registerType: RegisterType = RegisterType.integer;
         let width: SubRegisterWidth = SubRegisterWidth.dword;
         if (instruction.rex && instruction.rex.w) {
@@ -367,16 +357,13 @@ export class InstructionParser {
             width = SubRegisterWidth.word;
         }
         let m = opCodeToModRmRegRegisterMap;
-        switch (instruction.opCode) {
-            // TODO: this probably doesn't work with all byte-addressing operations?
-            case 0x88:
-                if (canAddressHighByte(modrmreg) && instruction.rex === undefined) {
-                    m = opCodeToModRmRegRegisterMap8;
-                    width = SubRegisterWidth.highByte;
-                } else {
-                    width = SubRegisterWidth.lowByte;
-                }
-                break;
+        if (instruction.is8BitsInstruction) {
+            if (canAddressHighByte(modrmreg) && instruction.rex === undefined) {
+                m = opCodeToModRmRegRegisterMap8;
+                width = SubRegisterWidth.highByte;
+            } else {
+                width = SubRegisterWidth.lowByte;
+            }
         }
         const register: Register | undefined = m[registerType][modrmreg][width];
         if (register === undefined) {
@@ -478,7 +465,7 @@ export class InstructionParser {
                         index: indexReg,
                         scaleFactor,
                         displacement: this.parseDisplacement(this.instruction.modRM.mod),
-                        dataSize: OperationSize.dword,
+                        dataSize: subRegisterWidthToWidth[width],
                     }
                 };
                 this.instruction.operands.push(operand);
@@ -498,7 +485,7 @@ export class InstructionParser {
                         index: null,
                         scaleFactor: 1,
                         displacement: this.parseDisplacement(this.instruction.modRM.mod),
-                        dataSize: OperationSize.dword,
+                        dataSize: subRegisterWidthToWidth[width],
                     }
                 };
                 this.instruction.operands.push(operand);
@@ -506,7 +493,7 @@ export class InstructionParser {
         }
     }
 
-    parseModRM() {
+    parseModRM(operandModRMOrder: OperandModRMOrder) {
         const byte: number = this.dv.getUint8(this.bytei);
         this.bytei++;
         this.instruction.modRM = {
@@ -515,8 +502,7 @@ export class InstructionParser {
             rm: byte & 0x07,
         };
 
-        const order = getOperandModRMOrder(this.instruction.opCode);
-        if (order === OperandModRMOrder.regFirstRmSecond) {
+        if (operandModRMOrder === OperandModRMOrder.regFirstRmSecond) {
             this.parseRegBits();
             this.parseRmBits()
         } else {
@@ -774,106 +760,66 @@ export class InstructionParser {
         this.instruction.operands.push({register: this.getRegisterInOpCode8(mask)});
     }
 
-    readOpCode() {
-        const bytes = new DataView(new ArrayBuffer(2));
-        const byte0 = this.dv.getUint8(this.bytei);
-        bytes.setUint8(0, byte0);
-        this.bytei++;
-        switch (byte0) {
-            // SYSCALL
-            case 0x0f:
-                bytes.setUint8(1, this.dv.getUint8(this.bytei));
-                this.bytei++;
-                this.instruction.opCode = bytes.getUint16(0, true);
-                break;
-            default:
-                this.instruction.opCode = byte0;
-        }
-
-        //console.log('Found opcode ' + this.instruction.opCode.toString(16));
-    }
-
     parse(): Instruction {
         const start = this.bytei;
 
         this.readOperandSizeOverridePrefix();
         this.readRex();
-        this.readOpCode();
+        let instructionBeginI = this.bytei;
+        for (const id of instructionDefinitions) {
+            let isTheInstruction = false;
+            if (id.opCode.registerCode !== undefined) {
+                let byte = this.dv.getUint8(this.bytei);
+                this.bytei++;
+                // if the instruction has a register code then it's always at most 1 byte long
+                if (byte >= id.opCode.bytes[0] && byte <= id.opCode.bytes[0] + 7) {
+                    this.instruction.type = id.mnemonic.instructionType;
+                    this.instruction.opCode = byte;
+                    isTheInstruction = true;
+                    if (id.opCode.registerCode === OperationSize.byte) {
+                        this.extratROperand8(id.opCode.bytes[0]);
+                    } else {
+                        this.extratROperand1632or64(id.opCode.bytes[0]);
+                    }
+                }
+            } else {
+                let opcode: number = 0;
+                let opcodeLength = 0;
 
-        // MOV reg16, imm16
-        // MOV reg32, imm32
-        // MOV reg64, imm64
-        if ((this.instruction.opCode & 0xB8) === 0xB8) {
-            this.instruction.type = InstructionType.MOV;
-            this.extratROperand1632or64(0xB8)
-            this.parseImmediate1632Or64AsOperand();
-
-        } else if ((this.instruction.opCode & 0xB0) === 0xB0) {
-            this.instruction.type = InstructionType.MOV;
-            this.extratROperand8(0xB0)
-            this.parseImmediate8AsOperand();
-        } else {
-            switch (this.instruction.opCode) {
-                /* SYSCALL */
-                case 0x050f:
-                    this.instruction.type = InstructionType.SYSCALL;
-                    break;
-                /* XOR */
-                case 0x34:
-                case 0x35:
-                case 0x80:
-                case 0x81:
-                case 0x83:
-                case 0x30:
-                    this.notImplemented();
-                    break;
-                // XOR reg/mem16, reg16
-                // XOR reg/mem32, reg32
-                // XOR reg/mem64, reg64
-                case 0x31:
-                    this.instruction.type = InstructionType.XOR;
-                    this.parseModRM();
-
-                    break;
-                case 0x32:
-                case 0x33:
-                /* MOV */
-                // MOV reg/mem8, reg8
-                case 0x88:
-                    this.instruction.type = InstructionType.MOV;
-                    this.parseModRM();
-                    break;
-                // MOV reg/mem16, reg16
-                // MOV reg/mem32, reg32
-                // MOV reg/mem32, reg64
-                case 0x89:
-                    this.instruction.type = InstructionType.MOV;
-                    this.parseModRM();
-                    break;
-                case 0x8A:
-                    this.notImplemented();
-                    break;
-                // MOV reg16, reg/mem16
-                // MOV reg32, reg/mem32
-                // MOV reg64, reg/mem64
-                case 0x8B:
-                    this.instruction.type = InstructionType.MOV;
-                    this.parseModRM();
-                    break;
-                case 0x8C:
-                case 0x8E:
-                case 0xA0:
-                case 0xA1:
-                case 0xA2:
-                case 0xA3:
-                case 0xB0:
-                case 0xC6:
-                case 0xC7:
-                    this.notImplemented();
-                    break;
-
-                default:
-                    this.notImplemented();
+                for (let i = 0; i < id.opCode.bytes.length; i++) {
+                    let byte = this.dv.getUint8(this.bytei);
+                    this.bytei++;
+                    if (byte !== id.opCode.bytes[i]) {
+                        break;
+                    } else {
+                        opcode |= (byte << opcodeLength);
+                        opcodeLength++;
+                        if (i === id.opCode.bytes.length - 1) {
+                            this.instruction.type = id.mnemonic.instructionType;
+                            isTheInstruction = true;
+                            this.instruction.opCode = opcode;
+                        }
+                    }
+                }
+            }
+            if (isTheInstruction) {
+                this.instruction.is8BitsInstruction = id.is8BitsInstruction;
+                if (id.opCode.modRM) {
+                    this.parseModRM(id.operandModRMOrder);
+                }
+                if (id.opCode.immediateSize !== undefined) {
+                    if (id.opCode.immediateSize === OperationSize.byte) {
+                        this.parseImmediate8AsOperand();
+                    } else {
+                        this.parseImmediate1632Or64AsOperand();
+                    }
+                }
+                if (id.opCode.modRMExtension) {
+                    throw new Error('ModRM extension (/0, /1, /2 etc.) not implemented.');
+                }
+                break;
+            } else {
+                this.bytei = instructionBeginI;
             }
         }
 

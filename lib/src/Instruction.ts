@@ -1,5 +1,10 @@
 import {Register} from "./amd64-architecture";
 
+export enum OperandModRMOrder {
+    regFirstRmSecond,
+    rmFirstRegSecond,
+}
+
 export enum InstructionType {
     none, ADD, MOV, XOR,
     SYSCALL,
@@ -48,6 +53,7 @@ export enum OperationSize {
 export type InstructionRaw = {
     type: InstructionType;
     operandSizeOverride: boolean;
+    is8BitsInstruction: boolean;
     opCode: number;
     operands: Operand[];
     length: number;

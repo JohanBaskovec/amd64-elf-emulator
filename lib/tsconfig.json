@@ -12,6 +12,6 @@
       "dom"
     ]
   },
-  "files": ["src/main.ts"],
+  "files": ["src/main.ts", "src/instructions-definitions.ts"],
   "exclude": ["node_modules", "**/*.test.ts", "build", "dist"]
 }

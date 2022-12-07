@@ -2,12 +2,14 @@ import {Process} from "./Process";
 import {BinaryFileReader} from "./BinaryFileReader";
 import {ELF64, ELF64Header, ProgramHeader, Type} from "./elf64";
 import {Emulator} from "./Emulator";
+import {initInstructionDefinitions} from "./instructions-definitions";
 
 export class Amd64Emulator extends Emulator {
     process?: Process;
 
     constructor() {
         super();
+        initInstructionDefinitions();
     }
 
     parseExecutable(bytes: ArrayBuffer) {
