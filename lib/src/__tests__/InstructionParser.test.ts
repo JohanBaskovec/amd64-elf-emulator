@@ -451,9 +451,112 @@ test('parse XOR', () => {
 
 });
 
+test('parse ADD', () => {
+    // add al, 8
+    // ADD AL, imm8
+    parseAndAssert("04 08", [{register: Register.AL}, {int: 8}], InstructionType.ADD);
 
+    // add ax, 257
+    // ADD AX, imm16
+    parseAndAssert("66 05 01 01", [{register: Register.AX}, {int: 257}], InstructionType.ADD);
 
+    // add eax, 66000
+    // ADD EAX, imm32
+    parseAndAssert("05 d0 01 01 00", [{register: Register.EAX}, {int: 66000}], InstructionType.ADD);
 
+    // add rax, 66000
+    // ADD RAX, imm32
+    parseAndAssert("48 05 d0 01 01 00", [{register: Register.RAX}, {int: 66000}], InstructionType.ADD);
 
+    // add r8b, 3
+    // ADD reg/mem8, imm8
+    parseAndAssert("41 80 c0 03", [{register: Register.R8B}, {int: 3}], InstructionType.ADD);
 
+    // add cx, 257
+    // ADD reg/mem16, imm16
+    parseAndAssert("66 81 c1 01 01", [{register: Register.CX}, {int: 257}], InstructionType.ADD);
 
+    // add edx, 66000
+    // ADD reg/mem32, imm32
+    parseAndAssert("81 c2 d0 01 01 00", [{register: Register.EDX}, {int: 66000}], InstructionType.ADD);
+
+    // add r13, 66000
+    // ADD reg/mem64, imm32
+    parseAndAssert("49 81 c5 d0 01 01 00", [{register: Register.R13}, {int: 66000}], InstructionType.ADD);
+
+    // add r15w, 8
+    // ADD reg/mem16, imm8
+    parseAndAssert("66 41 83 c7 08", [{register: Register.R15W}, {int: 8}], InstructionType.ADD);
+
+    // add r14d, 8
+    // ADD reg/mem32, imm8
+    parseAndAssert("41 83 c6 08", [{register: Register.R14D}, {int: 8}], InstructionType.ADD);
+
+    // add r13, 8
+    // ADD reg/mem64, imm8
+    parseAndAssert("49 83 c5 08", [{register: Register.R13}, {int: 8}], InstructionType.ADD);
+
+    // add al, r8b
+    // ADD reg/mem8, reg8
+    parseAndAssert("44 00 c0", [{register: Register.AL}, {register: Register.R8B}], InstructionType.ADD);
+
+    // add bx, r10w
+    // ADD reg/mem16, reg16
+    parseAndAssert("66 44 01 d3", [{register: Register.BX}, {register: Register.R10W}], InstructionType.ADD);
+
+    // add esi, r11d
+    // ADD reg/mem32, reg32
+    parseAndAssert("44 01 de", [{register: Register.ESI}, {register: Register.R11D}], InstructionType.ADD);
+
+    // add rdi, rax
+    // ADD reg/mem64, reg64
+    parseAndAssert("48 01 c7", [{register: Register.RDI}, {register: Register.RAX}], InstructionType.ADD);
+
+    // add dl, [datab]
+    // ADD reg8, reg/mem8
+    parseAndAssert("02 14 25 00 20 40 00", [{register: Register.DL}, {
+        effectiveAddr: {
+            base: null,
+            index: null,
+            displacement: 0x402000,
+            dataSize: OperationSize.byte,
+            scaleFactor: 1,
+        }
+    }], InstructionType.ADD);
+
+    // add r13w, [dataw]
+    // ADD reg16, reg/mem16
+    parseAndAssert("66 44 03 2c 25 01 20 40 00", [{register: Register.R13W}, {
+        effectiveAddr: {
+            base: null,
+            index: null,
+            displacement: 0x402001,
+            dataSize: OperationSize.word,
+            scaleFactor: 1,
+        }
+    }], InstructionType.ADD);
+
+    // add r14d, [datad]
+    // ADD reg32, reg/mem32
+    parseAndAssert("44 03 34 25 03 20 40 00", [{register: Register.R14D}, {
+        effectiveAddr: {
+            base: null,
+            index: null,
+            displacement: 0x402003,
+            dataSize: OperationSize.dword,
+            scaleFactor: 1,
+        }
+    }], InstructionType.ADD);
+
+    // add r15, [dataq]
+    // ADD reg64, reg/mem64
+    parseAndAssert("4c 03 3c 25 07 20 40 00", [{register: Register.R15}, {
+        effectiveAddr: {
+            base: null,
+            index: null,
+            displacement: 0x402007,
+            dataSize: OperationSize.qword,
+            scaleFactor: 1,
+        }
+    }], InstructionType.ADD);
+});
