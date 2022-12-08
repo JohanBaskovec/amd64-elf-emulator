@@ -1,6 +1,6 @@
 import {InstructionParser} from "../InstructionParser";
-import {Instruction, InstructionType, Operand, OperationSize} from "../Instruction";
-import {Register} from "../amd64-architecture";
+import {Instruction, InstructionType, Operand} from "../Instruction";
+import {OperationSize, Register} from "../amd64-architecture";
 
 function parseAndAssert(bytes: number[] | string, operands: Operand[], type: InstructionType) {
     if (typeof bytes === "string") {
@@ -559,4 +559,42 @@ test('parse ADD', () => {
             scaleFactor: 1,
         }
     }], InstructionType.ADD);
+});
+
+test('parse IMUL', () => {
+    // imul sil
+    // IMUL reg/mem8
+    parseAndAssert("40 f6 ee", [{register: Register.SIL}], InstructionType.IMUL);
+
+    // imul si
+    // IMUL reg/mem16
+    parseAndAssert("66 f7 ee", [{register: Register.SI}], InstructionType.IMUL);
+
+    // imul esi
+    // IMUL reg/mem32
+    parseAndAssert("f7 ee", [{register: Register.ESI}], InstructionType.IMUL);
+
+    // imul rsi
+    // IMUL reg/mem64
+    parseAndAssert("48 f7 ee", [{register: Register.RSI}], InstructionType.IMUL);
+
+    // imul si, r8w
+    // IMUL reg16, reg/mem16
+    parseAndAssert("66 41 0f af f0", [{register: Register.SI}, {register: Register.R8W}], InstructionType.IMUL);
+
+    // imul esi, r8d
+    // IMUL reg32, reg/mem32
+    parseAndAssert("41 0f af f0", [{register: Register.ESI}, {register: Register. R8D}], InstructionType.IMUL);
+
+    // imul rsi, r8
+    // IMUL reg64, reg/mem64
+    parseAndAssert("49 0f af f0", [{register: Register.RSI}, {register: Register.R8}], InstructionType.IMUL);
+
+    // TODO:
+    // IMUL reg16, reg/mem16, imm8
+    // IMUL reg32, reg/mem32, imm8
+    // IMUL reg64, reg/mem64, imm8
+    // IMUL reg16, reg/mem16, imm16
+    // IMUL reg32, reg/mem32, imm32
+    // IMUL reg64, reg/mem64, imm32
 });

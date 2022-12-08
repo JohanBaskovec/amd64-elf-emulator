@@ -1,9 +1,49 @@
 // copy-pasted from AMD64 Architecture Programmer's Manual, volume 3
 
-import {InstructionType, OperandModRMOrder, OperationSize} from "./Instruction";
+import {InstructionType, OperandModRMOrder} from "./Instruction";
+import {OperationSize} from "./amd64-architecture";
 
 //0 32 44
 export const rawInstructionDefinitions: string = `
+ADD AL, imm8                    04 ib       Add imm8 to AL.
+ADD AX, imm16                   05 iw       Add imm16 to AX.
+ADD EAX, imm32                  05 id       Add imm32 to EAX.
+ADD RAX, imm32                  05 id       Add sign-extended imm32 to RAX.
+ADD reg/mem8, imm8              80 /0 ib    Add imm8 to reg/mem8.
+ADD reg/mem16, imm16            81 /0 iw    Add imm16 to reg/mem16
+ADD reg/mem32, imm32            81 /0 id    Add imm32 to reg/mem32.
+ADD reg/mem64, imm32            81 /0 id    Add sign-extended imm32 to reg/mem64.
+ADD reg/mem16, imm8             83 /0 ib    Add sign-extended imm8 to reg/mem16
+ADD reg/mem32, imm8             83 /0 ib    Add sign-extended imm8 to reg/mem32.
+ADD reg/mem64, imm8             83 /0 ib    Add sign-extended imm8 to reg/mem64.
+ADD reg/mem8, reg8              00 /r       Add reg8 to reg/mem8.
+ADD reg/mem16, reg16            01 /r       Add reg16 to reg/mem16.
+ADD reg/mem32, reg32            01 /r       Add reg32 to reg/mem32.
+ADD reg/mem64, reg64            01 /r       Add reg64 to reg/mem64.
+ADD reg8, reg/mem8              02 /r       Add reg/mem8 to reg8.
+ADD reg16, reg/mem16            03 /r       Add reg/mem16 to reg16.
+ADD reg32, reg/mem32            03 /r       Add reg/mem32 to reg32.
+ADD reg64, reg/mem64            03 /r       Add reg/mem64 to reg64.
+
+IDIV reg/mem8                   F6 /7       Perform signed division of AX by the contents of an 8-bit register or memory location and store the quotient in AL and the remainder in AH.
+IDIV reg/mem16                  F7 /7       Perform signed division of DX:AX by the contents of a 16-bit register or memory location and store the quotient in AX and the remainder in DX.
+IDIV reg/mem32                  F7 /7       Perform signed division of EDX:EAX by the contents of a 32-bit register or memory location and store the quotient in EAX and the remainder in EDX.
+IDIV reg/mem64                  F7 /7       Perform signed division of RDX:RAX by the contents of a 64-bit register or memory location and store the quotient in RAX and the remainder in RDX.
+
+IMUL reg/mem8                   F6 /5       Multiply the contents of AL by the contents of an 8-bit memory or register operand and put the signed result in AX.
+IMUL reg/mem16                  F7 /5       Multiply the contents of AX by the contents of a 16-bit memory or register operand and put the signed result in DX:AX.
+IMUL reg/mem32                  F7 /5       Multiply the contents of EAX by the contents of a 32-bit memory or register operand and put the signed result in EDX:EAX.
+IMUL reg/mem64                  F7 /5       Multiply the contents of RAX by the contents of a 64-bit memory or register operand and put the signed result in RDX:RAX.
+IMUL reg16, reg/mem16           0F AF /r    Multiply the contents of a 16-bit destination register by the contents of a 16-bit register or memory operand and put the signed result in the 16-bit destination register.
+IMUL reg32, reg/mem32           0F AF /r    Multiply the contents of a 32-bit destination register by the contents of a 32-bit register or memory operand and put the signed result in the 32-bit destination register.
+IMUL reg64, reg/mem64           0F AF /r    Multiply the contents of a 64-bit destination register by the contents of a 64-bit register or memory operand and put the signed result in the 64-bit destination register.
+IMUL reg16, reg/mem16, imm8     6B /r ib    Multiply the contents of a 16-bit register or memory operand by a sign-extended immediate byte and put the signed result in the 16-bit destination register.
+IMUL reg32, reg/mem32, imm8     6B /r ib    Multiply the contents of a 32-bit register or memory operand by a sign-extended immediate byte and put the signed result in the 32-bit destination register.
+IMUL reg64, reg/mem64, imm8     6B /r ib    Multiply the contents of a 64-bit register or memory operand by a sign-extended immediate byte and put the signed result in the 64-bit destination register.
+IMUL reg16, reg/mem16, imm16    69 /r iw    Multiply the contents of a 16-bit register or memory operand by a sign-extended immediate word and put the signed result in the 16-bit destination register.
+IMUL reg32, reg/mem32, imm32    69 /r id    Multiply the contents of a 32-bit register or memory operand by a sign-extended immediate double and put the signed result in the 32-bit destination register.
+IMUL reg64, reg/mem64, imm32    69 /r id    Multiply the contents of a 64-bit register or memory operand by a sign-extended immediate double and put the signed result in the 64-bit destination register.
+
 MOV reg/mem8, reg8              88 /r       Move the contents of an 8-bit register to an 8-bit destination register or memory operand.
 MOV reg/mem16, reg16            89 /r       Move the contents of a 16-bit register to a 16-bit destination register or memory operand.
 MOV reg/mem32, reg32            89 /r       Move the contents of a 32-bit register to a 32-bit destination register or memory operand.
@@ -30,26 +70,6 @@ MOV reg/mem8, imm8              C6 /0 ib    Move an 8-bit immediate value to an 
 MOV reg/mem16, imm16            C7 /0 iw    Move a 16-bit immediate value to a 16-bit register or memory operand.
 MOV reg/mem32, imm32            C7 /0 id    Move a 32-bit immediate value to a 32-bit register or memory operand.
 MOV reg/mem64, imm32            C7 /0 id    Move a 32-bit signed immediate value to a 64-bit register or memory operand.
-
-ADD AL, imm8                    04 ib       Add imm8 to AL.
-ADD AX, imm16                   05 iw       Add imm16 to AX.
-ADD EAX, imm32                  05 id       Add imm32 to EAX.
-ADD RAX, imm32                  05 id       Add sign-extended imm32 to RAX.
-ADD reg/mem8, imm8              80 /0 ib    Add imm8 to reg/mem8.
-ADD reg/mem16, imm16            81 /0 iw    Add imm16 to reg/mem16
-ADD reg/mem32, imm32            81 /0 id    Add imm32 to reg/mem32.
-ADD reg/mem64, imm32            81 /0 id    Add sign-extended imm32 to reg/mem64.
-ADD reg/mem16, imm8             83 /0 ib    Add sign-extended imm8 to reg/mem16
-ADD reg/mem32, imm8             83 /0 ib    Add sign-extended imm8 to reg/mem32.
-ADD reg/mem64, imm8             83 /0 ib    Add sign-extended imm8 to reg/mem64.
-ADD reg/mem8, reg8              00 /r       Add reg8 to reg/mem8.
-ADD reg/mem16, reg16            01 /r       Add reg16 to reg/mem16.
-ADD reg/mem32, reg32            01 /r       Add reg32 to reg/mem32.
-ADD reg/mem64, reg64            01 /r       Add reg64 to reg/mem64.
-ADD reg8, reg/mem8              02 /r       Add reg/mem8 to reg8.
-ADD reg16, reg/mem16            03 /r       Add reg/mem16 to reg16.
-ADD reg32, reg/mem32            03 /r       Add reg/mem32 to reg32.
-ADD reg64, reg/mem64            03 /r       Add reg/mem64 to reg64.
 
 XOR AL, imm8                    34 ib       xor the contents of AL with an immediate 8-bit operand and store the result in AL.
 XOR AX, imm16                   35 iw       xor the contents of AX with an immediate 16-bit operand and store the result in AX.

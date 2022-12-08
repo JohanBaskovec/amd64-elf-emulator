@@ -1,0 +1,17 @@
+
+large_division:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+0000000000401000 <_start>:
+  401000:	48 b8 47 fd ff ff ff 	movabs rax,0x7ffffffffffffd47
+  401007:	ff ff 7f 
+  40100a:	bb 5e 00 00 00       	mov    ebx,0x5e
+  40100f:	48 f7 eb             	imul   rbx
+  401012:	48 bb 5c 4f b8 1e 85 	movabs rbx,0x7851eb851eb84f5c
+  401019:	eb 51 78 
+  40101c:	48 f7 fb             	idiv   rbx
+  40101f:	48 89 d7             	mov    rdi,rdx
+  401022:	b8 3c 00 00 00       	mov    eax,0x3c
+  401027:	0f 05                	syscall 

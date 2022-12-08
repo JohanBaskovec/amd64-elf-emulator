@@ -5,9 +5,23 @@ import {
     ModRM,
     Operand,
     OperandModRMOrder,
-    OperationSize
 } from "./Instruction";
-import {Register, RegisterFamily} from "./amd64-architecture";
+import {
+    canAddressHighByte,
+    ModRMReg,
+    ModRMrmMobNot11b,
+    modRMrmMobNot11bToRegisterMap,
+    opCodeToModRmRegRegisterMap,
+    opCodeToModRmRegRegisterMap8,
+    OperationSize,
+    Register,
+    RegisterFamily,
+    registerFamilyWidthMapping,
+    RegisterType,
+    RegisterWidthMap,
+    sibScaleFactorMap,
+    SubRegisterWidth
+} from "./amd64-architecture";
 import {
     initInstructionDefinitions,
     InstructionDefinition,
@@ -17,254 +31,6 @@ import {
     operandTypeToWidth
 } from "./instructions-definitions";
 
-// table "ModRM.reg and .r/m Field Encodings" in AMD64 Architecture Programmer's Manual, Volume 3
-// columns "ModRM.reg" and "ModRM.r/m (mod = 11b)" (they are identical)
-enum ModRMReg {
-    rax_MMX0_XMM0_YMM0,
-    rCX_MMX1_XMM1_YMM1,
-    rDX_MMX2_XMM2_YMM2,
-    rBX_MMX3_XMM3_YMM3,
-    AH_rSP_MMX4_XMM4_YMM4,
-    CH_rBP_MMX5_XMM5_YMM5,
-    DH_rSI_MMX6_XMM6_YMM6,
-    BH_rDI_MMX7_XMM7_YMM7,
-    // r/m can be extended to 4 bits when REX.B is set
-    // I can't find this in the doc, so I reverse-engineered the machine code output by NASM
-    r8_MMX8_XMM8_YMM8,
-    r9_MMX9_XMM9_YMM9,
-    r10_MMX10_XMM10_YMM10,
-    r11_MMX11_XMM11_YMM11,
-    r12_MMX12_XMM12_YMM12,
-    r13_MMX13_XMM13_YMM13,
-    r14_MMX14_XMM14_YMM14,
-    r15_MMX15_XMM15_YMM15,
-}
-
-function canAddressHighByte(modrmreg: ModRMReg): boolean {
-    return modrmreg === ModRMReg.BH_rDI_MMX7_XMM7_YMM7 ||
-        modrmreg === ModRMReg.AH_rSP_MMX4_XMM4_YMM4 ||
-        modrmreg === ModRMReg.CH_rBP_MMX5_XMM5_YMM5 ||
-        modrmreg === ModRMReg.DH_rSI_MMX6_XMM6_YMM6;
-}
-
-enum ModRMrmMobNot11b {
-    rAX, rCX, rDX, rBX, SIB, rBP, rSI, rDI,
-    r8, r9, r10, r11, SIB2, r13, r14, r15
-}
-
-const modRMrmMobNot11bToRegisterMap: { [key in ModRMrmMobNot11b]?: RegisterFamily } = {
-    [ModRMrmMobNot11b.rAX]: RegisterFamily.rAX,
-    [ModRMrmMobNot11b.rCX]: RegisterFamily.rCX,
-    [ModRMrmMobNot11b.rDX]: RegisterFamily.rDX,
-    [ModRMrmMobNot11b.rBX]: RegisterFamily.rBX,
-    [ModRMrmMobNot11b.rBP]: RegisterFamily.rBP,
-    [ModRMrmMobNot11b.rSI]: RegisterFamily.rSI,
-    [ModRMrmMobNot11b.rDI]: RegisterFamily.rDI,
-    [ModRMrmMobNot11b.SIB]: undefined,
-    [ModRMrmMobNot11b.r8]: RegisterFamily.r8,
-    [ModRMrmMobNot11b.r9]: RegisterFamily.r9,
-    [ModRMrmMobNot11b.r10]: RegisterFamily.r10,
-    [ModRMrmMobNot11b.r11]: RegisterFamily.r11,
-    [ModRMrmMobNot11b.SIB2]: undefined,
-    [ModRMrmMobNot11b.r13]: RegisterFamily.r13,
-    [ModRMrmMobNot11b.r14]: RegisterFamily.r14,
-    [ModRMrmMobNot11b.r15]: RegisterFamily.r15,
-}
-
-const sibScaleFactorMap: { [scale: number]: number } = {
-    0x00: 1,
-    0x01: 2,
-    0x02: 4,
-    0x03: 8,
-}
-
-enum SubRegisterWidth {
-    qword, dword, word, highByte, lowByte
-}
-
-const subRegisterWidthToWidth: { [key in SubRegisterWidth]: OperationSize } = {
-    [SubRegisterWidth.lowByte]: OperationSize.byte,
-    [SubRegisterWidth.highByte]: OperationSize.byte,
-    [SubRegisterWidth.word]: OperationSize.word,
-    [SubRegisterWidth.dword]: OperationSize.dword,
-    [SubRegisterWidth.qword]: OperationSize.qword,
-}
-
-type RegisterWidthMap = {
-    [SubRegisterWidth.qword]: Register,
-    [SubRegisterWidth.dword]: Register,
-    [SubRegisterWidth.word]: Register,
-    [SubRegisterWidth.highByte]?: Register,
-    [SubRegisterWidth.lowByte]: Register,
-};
-
-const raxWidthMap: RegisterWidthMap = {
-    [SubRegisterWidth.qword]: Register.RAX,
-    [SubRegisterWidth.dword]: Register.EAX,
-    [SubRegisterWidth.word]: Register.AX,
-    [SubRegisterWidth.highByte]: Register.AH,
-    [SubRegisterWidth.lowByte]: Register.AL,
-}
-
-const rbxWidthMap: RegisterWidthMap = {
-    [SubRegisterWidth.qword]: Register.RBX,
-    [SubRegisterWidth.dword]: Register.EBX,
-    [SubRegisterWidth.word]: Register.BX,
-    [SubRegisterWidth.highByte]: Register.BH,
-    [SubRegisterWidth.lowByte]: Register.BL,
-}
-const rcxWidthMap: RegisterWidthMap = {
-    [SubRegisterWidth.qword]: Register.RCX,
-    [SubRegisterWidth.dword]: Register.ECX,
-    [SubRegisterWidth.word]: Register.CX,
-    [SubRegisterWidth.highByte]: Register.CH,
-    [SubRegisterWidth.lowByte]: Register.CL,
-}
-const rdxWidthMap: RegisterWidthMap = {
-    [SubRegisterWidth.qword]: Register.RDX,
-    [SubRegisterWidth.dword]: Register.EDX,
-    [SubRegisterWidth.word]: Register.DX,
-    [SubRegisterWidth.highByte]: Register.DH,
-    [SubRegisterWidth.lowByte]: Register.DL,
-}
-const rsiWidthMap: RegisterWidthMap = {
-    [SubRegisterWidth.qword]: Register.RSI,
-    [SubRegisterWidth.dword]: Register.ESI,
-    [SubRegisterWidth.word]: Register.SI,
-    [SubRegisterWidth.lowByte]: Register.SIL,
-}
-const rbpWidthMap: RegisterWidthMap = {
-    [SubRegisterWidth.qword]: Register.RBP,
-    [SubRegisterWidth.dword]: Register.EBP,
-    [SubRegisterWidth.word]: Register.BP,
-    [SubRegisterWidth.lowByte]: Register.BPL,
-}
-const rspWidthMap: RegisterWidthMap = {
-    [SubRegisterWidth.qword]: Register.RSP,
-    [SubRegisterWidth.dword]: Register.ESP,
-    [SubRegisterWidth.word]: Register.SP,
-    [SubRegisterWidth.lowByte]: Register.SPL,
-}
-const rdiWidthMap: RegisterWidthMap = {
-    [SubRegisterWidth.qword]: Register.RDI,
-    [SubRegisterWidth.dword]: Register.EDI,
-    [SubRegisterWidth.word]: Register.DI,
-    [SubRegisterWidth.lowByte]: Register.DIL,
-}
-const r8WidthMap: RegisterWidthMap = {
-    [SubRegisterWidth.qword]: Register.R8,
-    [SubRegisterWidth.dword]: Register.R8D,
-    [SubRegisterWidth.word]: Register.R8W,
-    [SubRegisterWidth.lowByte]: Register.R8B,
-}
-const r9WidthMap: RegisterWidthMap = {
-    [SubRegisterWidth.qword]: Register.R9,
-    [SubRegisterWidth.dword]: Register.R9D,
-    [SubRegisterWidth.word]: Register.R9W,
-    [SubRegisterWidth.lowByte]: Register.R9B,
-}
-const r10WidthMap: RegisterWidthMap = {
-    [SubRegisterWidth.qword]: Register.R10,
-    [SubRegisterWidth.dword]: Register.R10D,
-    [SubRegisterWidth.word]: Register.R10W,
-    [SubRegisterWidth.lowByte]: Register.R10B,
-}
-const r11WidthMap: RegisterWidthMap = {
-    [SubRegisterWidth.qword]: Register.R11,
-    [SubRegisterWidth.dword]: Register.R11D,
-    [SubRegisterWidth.word]: Register.R11W,
-    [SubRegisterWidth.lowByte]: Register.R11B,
-}
-const r12WidthMap: RegisterWidthMap = {
-    [SubRegisterWidth.qword]: Register.R12,
-    [SubRegisterWidth.dword]: Register.R12D,
-    [SubRegisterWidth.word]: Register.R12W,
-    [SubRegisterWidth.lowByte]: Register.R12B,
-}
-const r13WidthMap: RegisterWidthMap = {
-    [SubRegisterWidth.qword]: Register.R13,
-    [SubRegisterWidth.dword]: Register.R13D,
-    [SubRegisterWidth.word]: Register.R13W,
-    [SubRegisterWidth.lowByte]: Register.R13B,
-}
-const r14WidthMap: RegisterWidthMap = {
-    [SubRegisterWidth.qword]: Register.R14,
-    [SubRegisterWidth.dword]: Register.R14D,
-    [SubRegisterWidth.word]: Register.R14W,
-    [SubRegisterWidth.lowByte]: Register.R14B,
-}
-const r15WidthMap: RegisterWidthMap = {
-    [SubRegisterWidth.qword]: Register.R15,
-    [SubRegisterWidth.dword]: Register.R15D,
-    [SubRegisterWidth.word]: Register.R15W,
-    [SubRegisterWidth.lowByte]: Register.R15B,
-}
-
-const registerFamilyWidthMapping: { [key in RegisterFamily]: RegisterWidthMap } = {
-    [RegisterFamily.rAX]: raxWidthMap,
-    [RegisterFamily.rBX]: rbxWidthMap,
-    [RegisterFamily.rCX]: rcxWidthMap,
-    [RegisterFamily.rDX]: rdxWidthMap,
-    [RegisterFamily.rSP]: rspWidthMap,
-    [RegisterFamily.rBP]: rbpWidthMap,
-    [RegisterFamily.rDI]: rdiWidthMap,
-    [RegisterFamily.rSI]: rsiWidthMap,
-    [RegisterFamily.r8]: r8WidthMap,
-    [RegisterFamily.r9]: r9WidthMap,
-    [RegisterFamily.r10]: r10WidthMap,
-    [RegisterFamily.r11]: r11WidthMap,
-    [RegisterFamily.r12]: r12WidthMap,
-    [RegisterFamily.r13]: r13WidthMap,
-    [RegisterFamily.r14]: r14WidthMap,
-    [RegisterFamily.r15]: r15WidthMap,
-}
-
-
-enum RegisterType {
-    integer,
-}
-
-type ModRmRegRegisterWidthMap = { [modRmReg in ModRMReg]: RegisterWidthMap };
-const opCodeToModRmRegRegisterMap8: { [type in RegisterType]: ModRmRegRegisterWidthMap } = {
-    [RegisterType.integer]: {
-        [ModRMReg.rax_MMX0_XMM0_YMM0]: raxWidthMap,
-        [ModRMReg.rCX_MMX1_XMM1_YMM1]: rcxWidthMap,
-        [ModRMReg.rDX_MMX2_XMM2_YMM2]: rdxWidthMap,
-        [ModRMReg.rBX_MMX3_XMM3_YMM3]: rbxWidthMap,
-        [ModRMReg.AH_rSP_MMX4_XMM4_YMM4]: raxWidthMap,
-        [ModRMReg.CH_rBP_MMX5_XMM5_YMM5]: rcxWidthMap,
-        [ModRMReg.DH_rSI_MMX6_XMM6_YMM6]: rdxWidthMap,
-        [ModRMReg.BH_rDI_MMX7_XMM7_YMM7]: rbxWidthMap,
-        [ModRMReg.r8_MMX8_XMM8_YMM8]: r8WidthMap,
-        [ModRMReg.r9_MMX9_XMM9_YMM9]: r9WidthMap,
-        [ModRMReg.r10_MMX10_XMM10_YMM10]: r10WidthMap,
-        [ModRMReg.r11_MMX11_XMM11_YMM11]: r11WidthMap,
-        [ModRMReg.r12_MMX12_XMM12_YMM12]: r12WidthMap,
-        [ModRMReg.r13_MMX13_XMM13_YMM13]: r13WidthMap,
-        [ModRMReg.r14_MMX14_XMM14_YMM14]: r14WidthMap,
-        [ModRMReg.r15_MMX15_XMM15_YMM15]: r15WidthMap,
-    }
-};
-const opCodeToModRmRegRegisterMap: { [type in RegisterType]: ModRmRegRegisterWidthMap } = {
-    [RegisterType.integer]: {
-        [ModRMReg.rax_MMX0_XMM0_YMM0]: raxWidthMap,
-        [ModRMReg.rCX_MMX1_XMM1_YMM1]: rcxWidthMap,
-        [ModRMReg.rDX_MMX2_XMM2_YMM2]: rdxWidthMap,
-        [ModRMReg.rBX_MMX3_XMM3_YMM3]: rbxWidthMap,
-        [ModRMReg.AH_rSP_MMX4_XMM4_YMM4]: rspWidthMap,
-        [ModRMReg.CH_rBP_MMX5_XMM5_YMM5]: rbpWidthMap,
-        [ModRMReg.DH_rSI_MMX6_XMM6_YMM6]: rsiWidthMap,
-        [ModRMReg.BH_rDI_MMX7_XMM7_YMM7]: rdiWidthMap,
-        [ModRMReg.r8_MMX8_XMM8_YMM8]: r8WidthMap,
-        [ModRMReg.r9_MMX9_XMM9_YMM9]: r9WidthMap,
-        [ModRMReg.r10_MMX10_XMM10_YMM10]: r10WidthMap,
-        [ModRMReg.r11_MMX11_XMM11_YMM11]: r11WidthMap,
-        [ModRMReg.r12_MMX12_XMM12_YMM12]: r12WidthMap,
-        [ModRMReg.r13_MMX13_XMM13_YMM13]: r13WidthMap,
-        [ModRMReg.r14_MMX14_XMM14_YMM14]: r14WidthMap,
-        [ModRMReg.r15_MMX15_XMM15_YMM15]: r15WidthMap,
-    }
-};
 
 const rexMask = 0x40;
 const rexMaskW = 0x08;
@@ -877,6 +643,9 @@ export class InstructionParser {
                 }
             }
             if (isTheInstruction) {
+                if (this.isUnsupportedInstruction(id)) {
+                    throw new Error('Instruction unsupported: ' + id.opCode.uniq);
+                }
                 if (id.opCode.modRM) {
                     const modRM = this.readModRMByte(id.operandModRMOrder);
                     if (id.opCode.modRMExtension !== undefined) {
@@ -979,5 +748,28 @@ export class InstructionParser {
             length: this.instruction.length,
             operands: this.instruction.operands,
         };
+    }
+
+    private isOperandUnsupported(operand: OperandType): boolean {
+        switch (operand) {
+            case OperandType.moffset8:
+            case OperandType.moffset16:
+            case OperandType.moffset32:
+            case OperandType.moffset64:
+            case OperandType.reg16OrReg32OrReg64OrMem16:
+            case OperandType.segReg:
+                return true;
+            default:
+                return false;
+        }
+    }
+    private isUnsupportedInstruction(id: InstructionDefinition) {
+        const operands = id.mnemonic.operands;
+        for (const operand of operands) {
+            if (this.isOperandUnsupported(operand)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

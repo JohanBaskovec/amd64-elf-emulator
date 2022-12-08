@@ -1,4 +1,4 @@
-import {Register} from "./amd64-architecture";
+import {OperationSize, Register} from "./amd64-architecture";
 
 export enum OperandModRMOrder {
     regFirstRmSecond,
@@ -6,7 +6,7 @@ export enum OperandModRMOrder {
 }
 
 export enum InstructionType {
-    none, ADD, MOV, XOR,
+    none, ADD, IDIV, IMUL, MOV, XOR,
     SYSCALL,
 }
 
@@ -44,11 +44,6 @@ export class Operand {
     bigInt?: bigint;
     int?: number;
 }
-
-export enum OperationSize {
-    byte, word, dword, qword,
-}
-
 
 export type InstructionRaw = {
     type: InstructionType;
