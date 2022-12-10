@@ -7,6 +7,7 @@ import {
     rdxWidthMap,
     Register,
     Register64,
+    register64WidthMapping,
     registerOffset,
     registerReverseMap,
     registerWidthMap,
@@ -14,6 +15,27 @@ import {
 } from "./amd64-architecture";
 import {EffectiveAddress, Instruction, InstructionType, Operand} from "./Instruction";
 import {Emulator} from "./Emulator";
+
+type ValueWithWidth = {
+    value: bigint;
+    valueWidth: OperationSize;
+}
+
+const stackMaxSize = 2000000;
+
+const maxes = {
+    [OperationSize.byte]: 255n,
+    [OperationSize.word]: 65535n,
+    [OperationSize.dword]: 4294967295n,
+    [OperationSize.qword]: 18446744073709551615n,
+}
+
+const signByteMask = {
+    [OperationSize.byte]: 0x80n,
+    [OperationSize.word]: 0x8000n,
+    [OperationSize.dword]: 0x80000000n,
+    [OperationSize.qword]: 0x8000000000000000n,
+}
 
 export class Cpu {
     private registers: { [key in Register64]: DataView } = {
@@ -35,18 +57,25 @@ export class Cpu {
         [Register64.R15]: new DataView(new ArrayBuffer(8)),
     }
 
+    // 2mo stack
+    stack = new DataView(new ArrayBuffer(stackMaxSize));
+
     private rip: number = 0;
 
     // RFLAGS
-    private overflow: boolean = false;
-    private carry: boolean = false;
     private addrOffset: number = 0;
     private emulator: Emulator;
+    private zeroFlag: boolean = false;
+    private overflowFlag: boolean = false;
+    private carryFlag: boolean = false;
+    private parityFlag: boolean = false;
+    private signFlag: boolean = false;
 
     constructor(rip: number, addrOffset: number, emulator: Emulator) {
         this.rip = rip;
         this.addrOffset = addrOffset;
         this.emulator = emulator;
+        this.setRegisterValue(Register.RSP, BigInt(stackMaxSize - 16), true);
     }
 
     printRegister(register: Register): void {
@@ -91,29 +120,6 @@ Data in the DataView (big endian!):
 
     }
 
-    readUnsignedValueRegister(register: Register): bigint {
-        const reg64: Register64 = registerReverseMap[register];
-        const regDataView: DataView = this.registers[reg64];
-        const off: number = registerOffset[register];
-        const width = registerWidthMap[register];
-        // once we know the width of operand 2, we know width of operand 1
-        if (width === OperationSize.qword) {
-            return regDataView.getBigUint64(off, true);
-        } else {
-            switch (width) {
-                case OperationSize.dword:
-                    return BigInt(regDataView.getUint32(off, true));
-                case OperationSize.word:
-                    return BigInt(regDataView.getUint16(off, true));
-                case OperationSize.byte:
-                    return BigInt(regDataView.getUint8(off));
-                default:
-                    throw new Error('Unknown width!');
-
-            }
-        }
-    }
-
     getRegistersBytes(register: Register): Uint8Array {
         const reg64: Register64 = registerReverseMap[register];
         const regDataView: DataView = this.registers[reg64];
@@ -124,15 +130,23 @@ Data in the DataView (big endian!):
         return new Uint8Array(regDataView.buffer, off, widthBytes);
     }
 
+    readUnsignedValueRegister(register: Register): bigint {
+        return this.readValueRegister(register, false);
+    }
+
     readSignedValueRegister(register: Register): bigint {
+        return this.readValueRegister(register, true);
+    }
+
+    readValueRegister(register: Register, signed: boolean): bigint {
         const reg64: Register64 = registerReverseMap[register];
         const regDataView: DataView = this.registers[reg64];
         const off: number = registerOffset[register];
         const width = registerWidthMap[register];
-        if (width === OperationSize.qword) {
-            return regDataView.getBigInt64(off, true);
-        } else {
+        if (signed) {
             switch (width) {
+                case OperationSize.qword:
+                    return regDataView.getBigInt64(off, true);
                 case OperationSize.dword:
                     return BigInt(regDataView.getInt32(off, true));
                 case OperationSize.word:
@@ -141,22 +155,43 @@ Data in the DataView (big endian!):
                     return BigInt(regDataView.getInt8(off));
                 default:
                     throw new Error('Unknown width!');
-
+            }
+        } else {
+            switch (width) {
+                case OperationSize.qword:
+                    return regDataView.getBigUint64(off, true);
+                case OperationSize.dword:
+                    return BigInt(regDataView.getUint32(off, true));
+                case OperationSize.word:
+                    return BigInt(regDataView.getUint16(off, true));
+                case OperationSize.byte:
+                    return BigInt(regDataView.getUint8(off));
+                default:
+                    throw new Error('Unknown width!');
             }
         }
     }
 
+    setUnsignedRegisterValue(register: Register, value: bigint) {
+        this.setRegisterValue(register, value, false);
+    }
+
     setSignedRegisterValue(register: Register, value: bigint) {
+        this.setRegisterValue(register, value, true);
+    }
+
+    setRegisterValue(register: Register, value: bigint, signed: boolean) {
         //console.log('Before:');
         //this.printRegister(register);
         const reg64: Register64 = registerReverseMap[register];
         const regDataView: DataView = this.registers[reg64];
         const off: number = registerOffset[register];
         const width = registerWidthMap[register];
-        if (width === OperationSize.qword) {
-            regDataView.setBigInt64(off, value, true);
-        } else {
+        if (signed) {
             switch (width) {
+                case OperationSize.qword:
+                    regDataView.setBigInt64(off, value, true);
+                    break;
                 case OperationSize.dword:
                     // Writing 32 bits overwrite the entire register
                     regDataView.setBigInt64(0, value, true);
@@ -170,26 +205,12 @@ Data in the DataView (big endian!):
                     break;
                 default:
                     throw new Error('Unknown width!');
-
             }
-        }
-
-        //console.log('After:');
-        //this.printRegister(register);
-    }
-
-    setUnsignedRegisterValue(register: Register, value: bigint) {
-        //console.log('Before:');
-        //this.printRegister(register);
-        const reg64: Register64 = registerReverseMap[register];
-        const regDataView: DataView = this.registers[reg64];
-        const off: number = registerOffset[register];
-        const width = registerWidthMap[register];
-        //console.log(`MOVing ${value} into ${Register[register]}`);
-        if (width === OperationSize.qword) {
-            regDataView.setBigUint64(off, value, true);
         } else {
             switch (width) {
+                case OperationSize.qword:
+                    regDataView.setBigUint64(off, value, true);
+                    break;
                 case OperationSize.dword:
                     // Writing 32 bits overwrite the entire register
                     regDataView.setBigUint64(0, value, true);
@@ -247,84 +268,89 @@ Data in the DataView (big endian!):
         return this.readFromDataView(dataView, addr, width, false);
     }
 
-    private writeUnsignedDataAtAddress(dataView: DataView, addr: number, value: bigint, operationSize: OperationSize) {
-        addr = addr - this.addrOffset;
-        switch (operationSize) {
-            case OperationSize.byte:
-                return dataView.setUint8(addr, Number(value));
-            case OperationSize.word:
-                return dataView.setUint16(addr, Number(value), true);
-            case OperationSize.dword:
-                return dataView.setUint32(addr, Number(value), true);
-            case OperationSize.qword:
-                return dataView.setBigUint64(addr, value, true);
+    private writeDataAtAddress(dataView: DataView, addr: number, value: bigint, operationSize: OperationSize, signed: boolean): void {
+        if (signed) {
+            switch (operationSize) {
+                case OperationSize.byte:
+                    return dataView.setInt8(addr, Number(value));
+                case OperationSize.word:
+                    return dataView.setInt16(addr, Number(value), true);
+                case OperationSize.dword:
+                    return dataView.setInt32(addr, Number(value), true);
+                case OperationSize.qword:
+                    return dataView.setBigInt64(addr, value, true);
+            }
+        } else {
+            switch (operationSize) {
+                case OperationSize.byte:
+                    return dataView.setUint8(addr, Number(value));
+                case OperationSize.word:
+                    return dataView.setUint16(addr, Number(value), true);
+                case OperationSize.dword:
+                    return dataView.setUint32(addr, Number(value), true);
+                case OperationSize.qword:
+                    return dataView.setBigUint64(addr, value, true);
+            }
         }
-    }
-
-    private writeSignedDataAtAddress(dataView: DataView, addr: number, value: bigint, operationSize: OperationSize) {
-        addr = addr - this.addrOffset;
-        switch (operationSize) {
-            case OperationSize.byte:
-                return dataView.setInt8(addr, Number(value));
-            case OperationSize.word:
-                return dataView.setInt16(addr, Number(value), true);
-            case OperationSize.dword:
-                return dataView.setInt32(addr, Number(value), true);
-            case OperationSize.qword:
-                return dataView.setBigInt64(addr, value, true);
-        }
-
     }
 
     readUnsignedValueFromOperand(dataView: DataView, operand: Operand): bigint {
-        let val = 0n;
-        if (operand.register !== undefined) {
-            val = this.readUnsignedValueRegister(operand.register);
-        } else if (operand.bigInt !== undefined) {
-            val = operand.bigInt;
-        } else if (operand.int !== undefined) {
-            val = BigInt(operand.int);
-        } else if (operand.effectiveAddr !== undefined) {
-            const ea: EffectiveAddress = operand.effectiveAddr;
-            const addr = this.calculateAddress(ea);
-            val = this.readUnsignedDataAtAddr(dataView, addr, operand.effectiveAddr.dataSize);
-        }
-        return val;
+        return this.readValueFromOperand(dataView, operand, false);
     }
 
     readSignedValueFromOperand(dataView: DataView, operand: Operand): bigint {
-        let val = 0n;
+        return this.readValueFromOperand(dataView, operand, true);
+    }
+
+    getOperandWidth(operand: Operand): OperationSize {
         if (operand.register !== undefined) {
-            val = this.readSignedValueRegister(operand.register);
-        } else if (operand.bigInt !== undefined) {
-            val = operand.bigInt;
-        } else if (operand.int !== undefined) {
-            val = BigInt(operand.int);
+            return registerWidthMap[operand.register];
+        } else if (operand.immediate !== undefined) {
+            return operand.immediate.width;
+        } else if (operand.effectiveAddr !== undefined) {
+            return operand.effectiveAddr.dataSize
+        } else {
+            throw new Error('Empty operand');
+        }
+    }
+
+    readValueFromOperandWithWidth(dataView: DataView, operand: Operand, signed: boolean): ValueWithWidth {
+        const value = this.readValueFromOperand(dataView, operand, signed);
+        let width = this.getOperandWidth(operand);
+        return {value, valueWidth: width};
+    }
+
+    readValueFromOperand(dataView: DataView, operand: Operand, signed: boolean): bigint {
+        if (operand.register !== undefined) {
+            return this.readValueRegister(operand.register, signed);
+        } else if (operand.immediate !== undefined) {
+            if (signed) {
+                return this.interpretAsSigned(operand.immediate.value, operand.immediate.width);
+            } else {
+                return operand.immediate.value;
+            }
+        } else if (operand.relativeOffset !== undefined) {
+            if (signed) {
+                return this.interpretAsSigned(operand.relativeOffset.value, operand.relativeOffset.width);
+            } else {
+                return operand.relativeOffset.value;
+            }
         } else if (operand.effectiveAddr !== undefined) {
             const ea: EffectiveAddress = operand.effectiveAddr;
-            const addr = this.calculateAddress(ea);
-            val = this.readSignedDataAtAddr(dataView, addr, operand.effectiveAddr.dataSize);
-        }
-        return val;
-    }
-
-    writeUnsignedValueInOperand(dataView: DataView, operand: Operand, value: bigint): void {
-        if (operand.register !== undefined) {
-            this.setUnsignedRegisterValue(operand.register, value);
-        } else if (operand.effectiveAddr !== undefined) {
-            const ea = operand.effectiveAddr;
-            const addr = this.calculateAddress(ea);
-            this.writeUnsignedDataAtAddress(dataView, addr, value, ea.dataSize);
+            const addr = this.calculateAddress(ea) - this.addrOffset;
+            return this.readFromDataView(dataView, addr, operand.effectiveAddr.dataSize, signed);
+        } else {
+            throw new Error('Empty operand');
         }
     }
 
-    writeSignedValueInOperand(dataView: DataView, operand: Operand, value: bigint): void {
+    writeValueInOperand(dataView: DataView, operand: Operand, value: bigint, signed: boolean): void {
         if (operand.register !== undefined) {
-            this.setSignedRegisterValue(operand.register, value);
+            this.setRegisterValue(operand.register, value, signed);
         } else if (operand.effectiveAddr !== undefined) {
             const ea = operand.effectiveAddr;
-            const addr = this.calculateAddress(ea);
-            this.writeUnsignedDataAtAddress(dataView, addr, value, ea.dataSize);
+            const addr = this.calculateAddress(ea) - this.addrOffset;
+            this.writeDataAtAddress(dataView, addr, value, ea.dataSize, signed);
         }
     }
 
@@ -332,7 +358,14 @@ Data in the DataView (big endian!):
         let value0: bigint = this.readSignedValueFromOperand(dataView, instruction.operands[0]);
         let value1: bigint = this.readSignedValueFromOperand(dataView, instruction.operands[1]);
 
-        this.writeUnsignedValueInOperand(dataView, instruction.operands[0], value0 + value1);
+        this.writeValueInOperand(dataView, instruction.operands[0], value0 + value1, false);
+    }
+
+    doSUB(dataView: DataView, instruction: Instruction) {
+        let value0: bigint = this.readSignedValueFromOperand(dataView, instruction.operands[0]);
+        let value1: bigint = this.readSignedValueFromOperand(dataView, instruction.operands[1]);
+
+        this.writeValueInOperand(dataView, instruction.operands[0], value0 - value1, false);
     }
 
     private readValueRegisters(registers: Register[], signed: boolean): bigint {
@@ -389,20 +422,16 @@ Data in the DataView (big endian!):
 
         let valueCopy = value;
         // we use bigint here to be able to shift right more than 32
-        for (let i = 0 ; i < totalWidthBytes ; i++) {
+        for (let i = 0; i < totalWidthBytes; i++) {
             const registerIndex = Math.floor(i / widthPerRegister);
             const byte = valueCopy & 0xffn;
             bytes[registerIndex].push(Number(byte));
             valueCopy = valueCopy >> 8n;
         }
-        for (let i = 0 ; i < registers.length ; i++) {
+        for (let i = 0; i < registers.length; i++) {
             const dataView = new DataView(new Uint8Array(bytes[i]).buffer)
             const value: bigint = this.readFromDataView(dataView, 0, registerWidth, signed);
-            if (signed) {
-                this.setSignedRegisterValue(registers[i], value);
-            } else {
-                this.setUnsignedRegisterValue(registers[i], value);
-            }
+            this.setRegisterValue(registers[i], value, signed);
         }
     }
 
@@ -432,8 +461,8 @@ Data in the DataView (big endian!):
         const remainder = dividend % divisor;
         const quotient = dividend / divisor;
 
-        this.setSignedRegisterValue(highBytesRegister, remainder);
-        this.setSignedRegisterValue(lowBytesRegister, quotient);
+        this.setRegisterValue(highBytesRegister, remainder, true);
+        this.setRegisterValue(lowBytesRegister, quotient, true);
     }
 
     private doIMUL(dataView: DataView, instruction: Instruction) {
@@ -459,39 +488,223 @@ Data in the DataView (big endian!):
             if (lowBytesRegister === undefined) {
                 throw new Error('Could not find register.');
             }
-            const multiplicand: bigint = this.readSignedValueRegister(lowBytesRegister);
+            const multiplicand: bigint = this.readValueRegister(lowBytesRegister, true);
             const product: bigint = multiplicand * multiplier;
             this.writeValueRegisters([highBytesRegister, lowBytesRegister], product, true);
 
         } else if (instruction.operands.length === 2) {
+            const operand0: Operand = instruction.operands[0];
+            const multiplicand: bigint = this.readSignedValueFromOperand(dataView, operand0);
+            const operand1: Operand = instruction.operands[1];
+            const multiplier: bigint = this.readSignedValueFromOperand(dataView, operand1);
+            const product: bigint = multiplicand * multiplier;
+            this.writeValueInOperand(dataView, operand0, product, true);
 
         } else {
-
+            const multiplicand: bigint = this.readSignedValueFromOperand(dataView, instruction.operands[1]);
+            const multiplier: bigint = this.readSignedValueFromOperand(dataView, instruction.operands[2]);
+            const product: bigint = multiplicand * multiplier;
+            this.writeValueInOperand(dataView, instruction.operands[0], product, true);
         }
     }
+
+    readCurrentStackTop(width: OperationSize, signed: boolean): bigint {
+        const rsp = this.readValueRegister(Register.RSP, false);
+        return this.readFromDataView(this.stack, Number(rsp), width, signed);
+    }
+
+    private pushOnStack(value: bigint, width: OperationSize): void {
+        const widthBytes: number = operationSizeToBytesMap[width];
+        const rsp: bigint = this.readUnsignedValueRegister(Register.RSP);
+        const newRsp = rsp - BigInt(widthBytes);
+        if (newRsp < 0) {
+            throw new Error('Stack overflow.');
+        }
+        this.writeDataAtAddress(this.stack, Number(newRsp), value, width, true);
+        this.setUnsignedRegisterValue(Register.RSP, newRsp);
+    }
+
+    private doPUSH(dataView: DataView, instruction: Instruction): void {
+        const {value, valueWidth} = this.readValueFromOperandWithWidth(dataView, instruction.operands[0], false);
+        this.pushOnStack(value, valueWidth);
+    }
+
+    private doPOP(dataView: DataView, instruction: Instruction): void {
+        const width = this.getOperandWidth(instruction.operands[0]);
+        const value = this.readCurrentStackTop(width, true);
+        this.writeValueInOperand(dataView, instruction.operands[0], value, true);
+        const rsp: bigint = this.readUnsignedValueRegister(Register.RSP);
+        const widthBytes: number = operationSizeToBytesMap[width];
+        const newRsp = rsp + BigInt(widthBytes);
+        if (newRsp > stackMaxSize) {
+            throw new Error('Stack underflow.');
+        }
+        this.setUnsignedRegisterValue(Register.RSP, newRsp);
+
+    }
+
+    private doCMP(dataView: DataView, instruction: Instruction): void {
+        // it doesn't matter if we interpret as signed or unsigned, the comparison gives the same result
+        const value0 = this.readSignedValueFromOperand(dataView, instruction.operands[0]);
+        const value1 = this.readSignedValueFromOperand(dataView, instruction.operands[1]);
+        const res: bigint = value0 - value1;
+        // example:
+        // 9 >= 4, res = 5, SF = 0, OF = 0, CF = 0
+        // 4 >= 9, res = -5, SF = 1, OF = 0, CF = 1
+        this.zeroFlag = res === 0n;
+        this.signFlag = res < 0;
+        if (res > 0) {
+            this.overflowFlag = this.signFlag;
+        } else if (res < 0) {
+            this.overflowFlag = !this.signFlag;
+        } else {
+            this.overflowFlag = false;
+        }
+        this.carryFlag = res < 0;
+    }
+
+
+    private doXOR(dataView: DataView, instruction: Instruction): void {
+        if (instruction.operands[1].register === undefined) {
+            throw new Error(`opcode 0x31 (XOR) but operand 2 isn't a register!`);
+        }
+        let val1: bigint = this.readValueRegister(instruction.operands[1].register, false);
+        let val2: bigint = BigInt(0);
+
+        if (instruction.operands[0].register !== undefined) {
+            val2 = this.readValueRegister(instruction.operands[0].register, false);
+            //console.log(`0x31: ${val1}^${val2}`);
+            const res: bigint = val1 ^ val2;
+            this.setRegisterValue(instruction.operands[0].register, res, false);
+        } else if (instruction.operands[0].address !== undefined) {
+            throw new Error('not impl address');
+        } else if (instruction.operands[0].effectiveAddr) {
+            throw new Error('not impl effective addr');
+        }
+    }
+
+    private doMOV(dataView: DataView, instruction: Instruction): void {
+        let value: bigint = this.readValueFromOperand(dataView, instruction.operands[1], false);
+
+        if (instruction.operands[0].register !== undefined) {
+            this.setRegisterValue(instruction.operands[0].register, value, false);
+        } else if (instruction.operands[0].effectiveAddr !== undefined) {
+            const value = this.readValueFromOperand(dataView, instruction.operands[1], true);
+            const ea = instruction.operands[0].effectiveAddr;
+            const addr = this.calculateAddress(ea) - this.addrOffset;
+            this.writeDataAtAddress(dataView, addr, value, ea.dataSize, false);
+        }
+    }
+
+    private doMOVZX(dataView: DataView, instruction: Instruction): void {
+        const {value, valueWidth} = this.readValueFromOperandWithWidth(dataView, instruction.operands[1], true);
+        if (instruction.operands[0].register === undefined) {
+            throw new Error(`Target of MOVZX isn't a register.`);
+        }
+        const targetRegister: Register = instruction.operands[0].register;
+        const targetRegisterWidth: OperationSize = registerWidthMap[targetRegister];
+
+        const targetRegister64: Register64 = registerReverseMap[instruction.operands[0].register];
+        const regDataView: DataView = this.registers[targetRegister64];
+
+        const subRegisterWidth = defaultRegisterWidthToSubRegisterWidth[valueWidth];
+        const targetSubRegister: Register | undefined = register64WidthMapping[targetRegister64][subRegisterWidth]
+        if (targetSubRegister === undefined) {
+            throw new Error('Register not found');
+        }
+
+        switch (targetRegisterWidth) {
+            case OperationSize.qword:
+                regDataView.setBigInt64(0, 0n, true);
+                break;
+            case OperationSize.dword:
+                regDataView.setBigInt64(0, 0n, true);
+                break;
+            case OperationSize.word:
+                regDataView.setUint16(0, 0, true);
+                break;
+            case OperationSize.byte:
+                break;
+        }
+        switch (valueWidth) {
+            case OperationSize.byte:
+                regDataView.setUint8(0, Number(value));
+                break;
+            case OperationSize.word:
+                regDataView.setUint16(0, Number(value), true);
+                break;
+            case OperationSize.dword:
+                regDataView.setUint32(0, Number(value), true);
+                break;
+            case OperationSize.qword:
+                regDataView.setBigUint64(0, value, true);
+                break;
+        }
+    }
+
+    private interpretAsSigned(number: bigint, width: OperationSize): bigint {
+        if (number & signByteMask[width]) {
+            return number - maxes[width] - 1n;
+        } else {
+            return number;
+        }
+    }
+
+    private doJGE(dataView: DataView, instruction: Instruction): void {
+        if (this.overflowFlag === this.signFlag) {
+            const offset: bigint = this.readSignedValueFromOperand(dataView, instruction.operands[0]);
+            this.rip = this.rip + Number(offset)
+        }
+    }
+
+    private doCALL(dataView: DataView, instruction: Instruction): void {
+        this.pushOnStack(BigInt(this.rip), OperationSize.qword);
+        const offset: bigint = this.readSignedValueFromOperand(dataView, instruction.operands[0]);
+        this.rip = this.rip + Number(offset)
+    }
+
+    private doRET(dataView: DataView, instruction: Instruction): void {
+        // top of the stack MUST be RIP
+        const value = this.readCurrentStackTop(OperationSize.qword, true);
+        this.rip = Number(value);
+        const rsp: bigint = this.readUnsignedValueRegister(Register.RSP);
+        const newRsp = rsp + BigInt(8);
+        if (newRsp > stackMaxSize) {
+            throw new Error('Stack underflow.');
+        }
+        this.setUnsignedRegisterValue(Register.RSP, newRsp);
+    }
+    private doSYSCALL(dataView: DataView, instruction: Instruction): void {
+        const code = this.readValueRegister(Register.RAX, false);
+        //console.log(`System call code ${code}`);
+        switch (code) {
+            case 1n:
+                // TODO: will clamp to 32 bits without warning!
+                const strAddr = Number(this.readValueRegister(Register.RSI, false)) - this.addrOffset;
+                const strLength = Number(this.readValueRegister(Register.RDX, false));
+                const td = new TextDecoder("utf-8");
+                const dvs = dataView.buffer.slice(strAddr, strAddr + strLength);
+                const str = td.decode(dvs);
+                console.log('Write: ' + str);
+                this.emulator.onWrite(str);
+                break;
+            case 60n:
+                const exitCode = Number(this.readValueRegister(Register.RDI, false));
+                console.log(`Process finished with code ${exitCode}`);
+                this.emulator.onExit(exitCode);
+                break;
+            default:
+                throw new Error(`System call ${code} not implemented.`);
+        }
+    }
+
 
     execute(dataView: DataView, instruction: Instruction) {
         this.rip += instruction.length;
         //console.log(instructionFormat(instruction));
         switch (instruction.type) {
             case InstructionType.XOR:
-                if (instruction.operands[1].register === undefined) {
-                    throw new Error(`opcode 0x31 (XOR) but operand 2 isn't a register!`);
-                }
-                let val1: bigint = this.readUnsignedValueRegister(instruction.operands[1].register);
-                let val2: bigint = BigInt(0);
-
-                if (instruction.operands[0].register !== undefined) {
-                    val2 = this.readUnsignedValueRegister(instruction.operands[0].register);
-                    //console.log(`0x31: ${val1}^${val2}`);
-                    const res: bigint = val1 ^ val2;
-                    this.setUnsignedRegisterValue(instruction.operands[0].register, res);
-                } else if (instruction.operands[0].address !== undefined) {
-                    throw new Error('not impl address');
-                } else if (instruction.operands[0].effectiveAddr) {
-                    throw new Error('not impl effective addr');
-                }
-
+                this.doXOR(dataView, instruction);
                 break;
 
             case InstructionType.ADD:
@@ -503,59 +716,37 @@ Data in the DataView (big endian!):
             case InstructionType.IMUL:
                 this.doIMUL(dataView, instruction);
                 break;
+            case InstructionType.SUB:
+                this.doSUB(dataView, instruction);
+                break;
+            case InstructionType.PUSH:
+                this.doPUSH(dataView, instruction);
+                break;
+            case InstructionType.POP:
+                this.doPOP(dataView, instruction);
+                break;
 
             case InstructionType.MOV:
-                let value: bigint = 0n;
-                if (instruction.operands[1].register !== undefined) {
-                    value = this.readUnsignedValueRegister(instruction.operands[1].register);
-                } else if (instruction.operands[1].bigInt !== undefined) {
-                    value = instruction.operands[1].bigInt;
-                } else if (instruction.operands[1].int !== undefined) {
-                    value = BigInt(instruction.operands[1].int);
-                } else if (instruction.operands[1].effectiveAddr !== undefined) {
-                    const ea: EffectiveAddress = instruction.operands[1].effectiveAddr;
-                    const reg: Register | undefined = instruction.operands[0].register;
-
-                    if (reg === undefined) {
-                        throw new Error(`Second operand is an effective address, but the first operand isn't a register, that's impossible.`);
-                    }
-                    const addr = this.calculateAddress(ea);
-                    value = this.readUnsignedDataAtAddr(dataView, addr, instruction.operands[1].effectiveAddr.dataSize);
-                }
-                if (instruction.operands[0].register !== undefined) {
-                    this.setUnsignedRegisterValue(instruction.operands[0].register, value);
-                } else if (instruction.operands[0].effectiveAddr !== undefined) {
-                    const reg = instruction.operands[1].register;
-                    if (reg === undefined) {
-                        throw new Error(`First operand is an effective address, but the second operand isn't a register, that's impossible.`);
-                    }
-                    const ea = instruction.operands[0].effectiveAddr;
-                    const addr = this.calculateAddress(ea);
-                    this.writeUnsignedDataAtAddress(dataView, addr, value, ea.dataSize);
-                }
+                this.doMOV(dataView, instruction);
                 break;
+            case InstructionType.MOVZX:
+                this.doMOVZX(dataView, instruction);
+                break;
+            case InstructionType.JGE:
+                this.doJGE(dataView, instruction);
+                break;
+            case InstructionType.CMP:
+                this.doCMP(dataView, instruction);
+                break;
+            case InstructionType.CALL:
+                this.doCALL(dataView, instruction);
+                break;
+
             case InstructionType.SYSCALL:
-                const code = this.readUnsignedValueRegister(Register.RAX);
-                //console.log(`System call code ${code}`);
-                switch (code) {
-                    case 1n:
-                        // TODO: will clamp to 32 bits without warning!
-                        const strAddr = Number(this.readUnsignedValueRegister(Register.RSI)) - this.addrOffset;
-                        const strLength = Number(this.readUnsignedValueRegister(Register.RDX));
-                        const td = new TextDecoder("utf-8");
-                        const dvs = dataView.buffer.slice(strAddr, strAddr + strLength);
-                        const str = td.decode(dvs);
-                        console.log('Write: ' + str);
-                        this.emulator.onWrite(str);
-                        break;
-                    case 60n:
-                        const exitCode = Number(this.readUnsignedValueRegister(Register.RDI));
-                        console.log(`Process finished with code ${exitCode}`);
-                        this.emulator.onExit(exitCode);
-                        break;
-                    default:
-                        throw new Error(`System call ${code} not implemented.`);
-                }
+                this.doSYSCALL(dataView, instruction);
+                break;
+            case InstructionType.RET:
+                this.doRET(dataView, instruction);
                 break;
 
             default:
@@ -570,10 +761,10 @@ Data in the DataView (big endian!):
         let displacement = ea.displacement;
         if (ea.base !== null) {
             // TODO: large address not supported
-            base = Number(this.readUnsignedValueRegister(ea.base));
+            base = Number(this.readValueRegister(ea.base, false));
         }
         if (ea.index !== null) {
-            index = Number(this.readUnsignedValueRegister(ea.index));
+            index = Number(this.readValueRegister(ea.index, false));
         }
         const addr = base + index * scaleFactor + displacement;
         return addr;

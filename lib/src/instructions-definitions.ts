@@ -25,6 +25,32 @@ ADD reg16, reg/mem16            03 /r       Add reg/mem16 to reg16.
 ADD reg32, reg/mem32            03 /r       Add reg/mem32 to reg32.
 ADD reg64, reg/mem64            03 /r       Add reg/mem64 to reg64.
 
+CALL rel16off                   E8 iw       Near call with the target specified by a 16-bit relative displacement.
+CALL rel32off                   E8 id       Near call with the target specified by a 32-bit relative displacement.
+//CALL reg/mem16                FF /2       Near call with the target specified by reg/mem16.
+//CALL reg/mem32                FF /2       Near call with the target specified by reg/mem32. (There is no prefix for encoding this in 64-bit mode.)
+//CALL reg/mem64                FF /2       Near call with the target specified by reg/mem64.
+
+CMP AL, imm8                    3C ib       Compare an 8-bit immediate value with the contents of the AL register.
+CMP AX, imm16                   3D iw       Compare a 16-bit immediate value with the contents of the AX register.
+CMP EAX, imm32                  3D id       Compare a 32-bit immediate value with the contents of the EAX register.
+CMP RAX, imm32                  3D id       Compare a 32-bit immediate value with the contents of the RAX register.
+CMP reg/mem8, imm8              80 /7 ib    Compare an 8-bit immediate value with the contents of an 8-bit register or memory operand.
+CMP reg/mem16, imm16            81 /7 iw    Compare a 16-bit immediate value with the contents of a 16-bit register or memory operand.
+CMP reg/mem32, imm32            81 /7 id    Compare a 32-bit immediate value with the contents of a 32-bit register or memory operand.
+CMP reg/mem64, imm32            81 /7 id    Compare a 32-bit signed immediate value with the contents of a 64-bit register or memory operand.
+CMP reg/mem16, imm8             83 /7 ib    Compare an 8-bit signed immediate value with the contents of a 16-bit register or memory operand.
+CMP reg/mem32, imm8             83 /7 ib    Compare an 8-bit signed immediate value with the contents of a 32-bit register or memory operand.
+CMP reg/mem64, imm8             83 /7 ib    Compare an 8-bit signed immediate value with the contents of a 64-bit register or memory operand.
+CMP reg/mem8, reg8              38 /r       Compare the contents of an 8-bit register or memory operand with the contents of an 8-bit register.
+CMP reg/mem16, reg16            39 /r       Compare the contents of a 16-bit register or memory operand with the contents of a 16-bit register.
+CMP reg/mem32, reg32            39 /r       Compare the contents of a 32-bit register or memory operand with the contents of a 32-bit register.
+CMP reg/mem64, reg64            39 /r       Compare the contents of a 64-bit register or memory operand with the contents of a 64-bit register.
+CMP reg8, reg/mem8              3A /r       Compare the contents of an 8-bit register with the contents of an 8-bit register or memory operand.
+CMP reg16, reg/mem16            3B /r       Compare the contents of a 16-bit register with the contents of a 16-bit register or memory operand.
+CMP reg32, reg/mem32            3B /r       Compare the contents of a 32-bit register with the contents of a 32-bit register or memory operand.
+CMP reg64, reg/mem64            3B /r       Compare the contents of a 64-bit register with the contents of a 64-bit register or memory operand.
+
 IDIV reg/mem8                   F6 /7       Perform signed division of AX by the contents of an 8-bit register or memory location and store the quotient in AL and the remainder in AH.
 IDIV reg/mem16                  F7 /7       Perform signed division of DX:AX by the contents of a 16-bit register or memory location and store the quotient in AX and the remainder in DX.
 IDIV reg/mem32                  F7 /7       Perform signed division of EDX:EAX by the contents of a 32-bit register or memory location and store the quotient in EAX and the remainder in EDX.
@@ -43,6 +69,10 @@ IMUL reg64, reg/mem64, imm8     6B /r ib    Multiply the contents of a 64-bit re
 IMUL reg16, reg/mem16, imm16    69 /r iw    Multiply the contents of a 16-bit register or memory operand by a sign-extended immediate word and put the signed result in the 16-bit destination register.
 IMUL reg32, reg/mem32, imm32    69 /r id    Multiply the contents of a 32-bit register or memory operand by a sign-extended immediate double and put the signed result in the 32-bit destination register.
 IMUL reg64, reg/mem64, imm32    69 /r id    Multiply the contents of a 64-bit register or memory operand by a sign-extended immediate double and put the signed result in the 64-bit destination register.
+
+JGE rel8off                     7D cb       Jump if greater or equal (SF = OF).
+JGE rel16off                    0F 8D cw    Jump if greater or equal (SF = OF).
+JGE rel32off                    0F 8D cd    Jump if greater or equal (SF = OF).
 
 MOV reg/mem8, reg8              88 /r       Move the contents of an 8-bit register to an 8-bit destination register or memory operand.
 MOV reg/mem16, reg16            89 /r       Move the contents of a 16-bit register to a 16-bit destination register or memory operand.
@@ -70,6 +100,53 @@ MOV reg/mem8, imm8              C6 /0 ib    Move an 8-bit immediate value to an 
 MOV reg/mem16, imm16            C7 /0 iw    Move a 16-bit immediate value to a 16-bit register or memory operand.
 MOV reg/mem32, imm32            C7 /0 id    Move a 32-bit immediate value to a 32-bit register or memory operand.
 MOV reg/mem64, imm32            C7 /0 id    Move a 32-bit signed immediate value to a 64-bit register or memory operand.
+
+MOVZX reg16, reg/mem8           0F B6 /r    Move the contents of an 8-bit register or memory operand to a 16-bit register with zero-extension.
+MOVZX reg32, reg/mem8           0F B6 /r    Move the contents of an 8-bit register or memory operand to a 32-bit register with zero-extension.
+MOVZX reg64, reg/mem8           0F B6 /r    Move the contents of an 8-bit register or memory operand to a 64-bit register with zero-extension.
+MOVZX reg32, reg/mem16          0F B7 /r    Move the contents of a 16-bit register or memory operand to a 32-bit register with zero-extension.
+MOVZX reg64, reg/mem16          0F B7 /r    Move the contents of a 16-bit register or memory operand to a 64-bit register with zero-extension.
+
+POP reg/mem16                   8F /0       Pop the top of the stack into a 16-bit register or memory location.
+POP reg/mem32                   8F /0       Pop the top of the stack into a 32-bit register or memory location. (No prefix for encoding this in 64-bit mode.)
+POP reg/mem64                   8F /0       Pop the top of the stack into a 64-bit register or memory location.
+POP reg16                       58 +rw      Pop the top of the stack into a 16-bit register.
+POP reg32                       58 +rd      Pop the top of the stack into a 32-bit register. (No prefix for encoding this in 64-bit mode.)
+POP reg64                       58 +rq      Pop the top of the stack into a 64-bit register.
+
+PUSH reg/mem16                  FF /6       Push the contents of a 16-bit register or memory operand onto the stack.
+PUSH reg/mem32                  FF /6       Push the contents of a 32-bit register or memory operand onto the stack. (No prefix for encoding this in 64-bit mode.)
+PUSH reg/mem64                  FF /6       Push the contents of a 64-bit register or memory operand onto the stack.
+PUSH reg16                      50 +rw      Push the contents of a 16-bit register onto the stack. PUSH reg32 50 +rd Push the contents of a 32-bit register onto the stack. (No prefix for encoding this in 64-bit mode.)
+//PUSH reg32                    50 +rd      Push the contents of a 32-bit register onto the stack. (No prefix for encoding this in 64-bit mode.)
+PUSH reg64                      50 +rq      Push the contents of a 64-bit register onto the stack.
+PUSH imm8                       6A ib       Push an 8-bit immediate value (sign-extended to 16, 32, or 64 bits) onto the stack.
+PUSH imm16                      68 iw       Push a 16-bit immediate value onto the stack.
+PUSH imm32                      68 id       Push a 32-bit immediate value onto the stack. (No prefix for encoding this in 64-bit mode.)
+PUSH imm64                      68 id       Push a sign-extended 32-bit immediate value onto the stack.
+
+RET                             C3          Near return to the calling procedure.
+//RET imm16                     C2 iw       Near return to the calling procedure then pop the specified number of bytes from the stack.
+
+SUB AL, imm8                    2C ib       Subtract an immediate 8-bit value from the AL register and store the result in AL.
+SUB AX, imm16                   2D iw       Subtract an immediate 16-bit value from the AX register and store the result in AX.
+SUB EAX, imm32                  2D id       Subtract an immediate 32-bit value from the EAX register and store the result in EAX.
+SUB RAX, imm32                  2D id       Subtract a sign-extended immediate 32-bit value from the RAX register and store the result in RAX.
+SUB reg/mem8, imm8              80 /5 ib    Subtract an immediate 8-bit value from an 8-bit destination register or memory location.
+SUB reg/mem16, imm16            81 /5 iw    Subtract an immediate 16-bit value from a 16-bit destination register or memory location.
+SUB reg/mem32, imm32            81 /5 id    Subtract an immediate 32-bit value from a 32-bit destination register or memory location.
+SUB reg/mem64, imm32            81 /5 id    Subtract a sign-extended immediate 32-bit value from a 64-bit destination register or memory location.
+SUB reg/mem16, imm8             83 /5 ib    Subtract a sign-extended immediate 8-bit value from a 16-bit register or memory location.
+SUB reg/mem32, imm8             83 /5 ib    Subtract a sign-extended immediate 8-bit value from a 32-bit register or memory location.
+SUB reg/mem64, imm8             83 /5 ib    Subtract a sign-extended immediate 8-bit value from a 64-bit register or memory location.
+SUB reg/mem8, reg8              28 /r       Subtract the contents of an 8-bit register from an 8-bit destination register or memory location.
+SUB reg/mem16, reg16            29 /r       Subtract the contents of a 16-bit register from a 16-bit destination register or memory location.
+SUB reg/mem32, reg32            29 /r       Subtract the contents of a 32-bit register from a 32-bit destination register or memory location.
+SUB reg/mem64, reg64            29 /r       Subtract the contents of a 64-bit register from a 64-bit destination register or memory location.
+SUB reg8, reg/mem8              2A /r       Subtract the contents of an 8-bit register or memory operand from an 8-bit destination register.
+SUB reg16, reg/mem16            2B /r       Subtract the contents of a 16-bit register or memory operand from a 16-bit destination register.
+SUB reg32, reg/mem32            2B /r       Subtract the contents of a 32-bit register or memory operand from a 32-bit destination register.
+SUB reg64, reg/mem64            2B /r       Subtract the contents of a 64-bit register or memory operand from a 64-bit destination register.
 
 XOR AL, imm8                    34 ib       xor the contents of AL with an immediate 8-bit operand and store the result in AL.
 XOR AX, imm16                   35 iw       xor the contents of AX with an immediate 16-bit operand and store the result in AX.
@@ -101,7 +178,9 @@ export enum OperandType {
     AL, AX, EAX, RAX,
     moffset8, moffset16, moffset32, moffset64,
     segReg,
-    reg16OrReg32OrReg64OrMem16
+    reg16OrReg32OrReg64OrMem16,
+    relativeOffset8, relativeOffset16, relativeOffset32
+    ,
 }
 
 export const operandTypeToWidth: {[key in OperandType]?: OperationSize} = {
@@ -126,6 +205,9 @@ export const operandTypeToWidth: {[key in OperandType]?: OperationSize} = {
     [OperandType.moffset32]: OperationSize.dword,
     [OperandType.moffset64]: OperationSize.qword,
     [OperandType.reg16OrReg32OrReg64OrMem16]: OperationSize.qword,
+    [OperandType.relativeOffset8]: OperationSize.byte,
+    [OperandType.relativeOffset16]: OperationSize.word,
+    [OperandType.relativeOffset32]: OperationSize.dword,
 }
 
 export type InstructionDefinition = {
@@ -143,6 +225,7 @@ export type InstructionDefinition = {
         bytes: number[],
         modRM: boolean,
         immediateSize?: OperationSize,
+        codeOffsetSize?: OperationSize,
         modRMExtension?: number,
         registerCode?: OperationSize,
     },
@@ -169,8 +252,12 @@ const operandStrToOperandType: {[operandTypeStr: string]: OperandType} = {
     'moffset16': OperandType.moffset16,
     'moffset32': OperandType.moffset32,
     'moffset64': OperandType.moffset64,
+
     'segReg': OperandType.segReg,
-    'reg16/32/64/mem16': OperandType.reg16OrReg32OrReg64OrMem16
+    'reg16/32/64/mem16': OperandType.reg16OrReg32OrReg64OrMem16,
+    'rel8off': OperandType.relativeOffset8,
+    'rel16off': OperandType.relativeOffset16,
+    'rel32off': OperandType.relativeOffset32,
 }
 
 export const instructionDefinitionsByOpCode = new Map<string, InstructionDefinition[]>;
@@ -181,7 +268,7 @@ function parseInstructionDefinitions() {
 
     for (let i = 0 ; i < lines.length ; i++) {
         const line = lines[i];
-        if (line.length === 0) {
+        if (line.length === 0 || line.startsWith("//")) {
             continue;
         }
         const mnemonicStr = line.substring(0, 31).trim();
@@ -209,6 +296,7 @@ function parseInstructionDefinitions() {
         const opcodeStr = line.substring(32, 43).trim();
         const opCodeParts = opcodeStr.split(' ');
         let opcodeImmediate: OperationSize | undefined;
+        let codeOffsetSize: OperationSize | undefined;
         let modRMExtension: number | undefined;
         let modRM = false;
         let registerCode: OperationSize | undefined;
@@ -231,6 +319,17 @@ function parseInstructionDefinitions() {
                 case 'iq':
                     opcodeImmediate = OperationSize.qword;
                     break;
+                case 'cb':
+                    codeOffsetSize = OperationSize.byte;
+                    break;
+                case 'cw':
+                    codeOffsetSize = OperationSize.word;
+                    break;
+                case 'cd':
+                    codeOffsetSize = OperationSize.dword;
+                    break;
+                case 'cp':
+                    throw new Error('cp not implemented')
                 case '/0':
                     modRMExtension = 0;
                     modRM = true;
@@ -332,6 +431,7 @@ function parseInstructionDefinitions() {
                 uniq,
                 str: opcodeStr,
                 immediateSize: opcodeImmediate,
+                codeOffsetSize,
                 bytes: opcodeBytes,
                 modRMExtension,
                 modRM,

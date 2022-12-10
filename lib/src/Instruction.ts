@@ -6,8 +6,10 @@ export enum OperandModRMOrder {
 }
 
 export enum InstructionType {
-    none, ADD, IDIV, IMUL, MOV, XOR,
+    none, ADD, IDIV, IMUL, MOV, MOVZX, CMP, JGE, XOR, SUB,
+    PUSH, POP,
     SYSCALL,
+    CALL, RET,
 }
 
 export type REXPrefix = {
@@ -37,12 +39,22 @@ export type EffectiveAddress = {
     dataSize: OperationSize,
 }
 
+export type Immediate = {
+    value: bigint,
+    width: OperationSize,
+}
+
+export type RelativeOffset = {
+    value: bigint,
+    width: OperationSize,
+}
+
 export class Operand {
     address?: number;
     register?: Register;
     effectiveAddr?: EffectiveAddress;
-    bigInt?: bigint;
-    int?: number;
+    immediate?: Immediate;
+    relativeOffset?: RelativeOffset;
 }
 
 export type InstructionRaw = {
@@ -61,6 +73,7 @@ export type Instruction = {
     type: InstructionType;
     operands: Operand[];
     length: number;
+    address?: number;
 }
 
 export function instructionFormat(instruction: Instruction): object {
@@ -80,8 +93,7 @@ export function instructionFormat(instruction: Instruction): object {
                 address: operand.address ? operand.address.toString(16): undefined,
                 register: operand.register ? Register[operand.register] : undefined,
                 effectiveAddress: effectiveAddress,
-                bigInt: operand.bigInt ? operand.bigInt : undefined,
-                int: operand.int ? operand.int:  undefined,
+                immediate: operand.immediate ? operand.immediate : undefined,
             }
         }),
         length: instruction.length,

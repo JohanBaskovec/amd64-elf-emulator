@@ -1,11 +1,4 @@
-import {
-    Instruction,
-    InstructionRaw,
-    InstructionType,
-    ModRM,
-    Operand,
-    OperandModRMOrder,
-} from "./Instruction";
+import {Instruction, InstructionRaw, InstructionType, ModRM, Operand, OperandModRMOrder,} from "./Instruction";
 import {
     canAddressHighByte,
     ModRMReg,
@@ -18,7 +11,6 @@ import {
     RegisterFamily,
     registerFamilyWidthMapping,
     RegisterType,
-    RegisterWidthMap,
     sibScaleFactorMap,
     SubRegisterWidth
 } from "./amd64-architecture";
@@ -370,25 +362,68 @@ export class InstructionParser {
         return imm;
     }
 
+    parseRelativeOffsetAsOperand(maxSize: OperationSize): void {
+        let value: bigint = 0n;
+        let width = OperationSize.dword;
+        switch (maxSize) {
+            case OperationSize.byte:
+            case OperationSize.word:
+                width = maxSize;
+                break;
+            case OperationSize.dword:
+                if (this.instruction.operandSizeOverride) {
+                    width = OperationSize.word;
+                } else {
+                    width = OperationSize.dword;
+                }
+                break;
+            case OperationSize.qword:
+                throw new Error('relative offset cannot be 64 bits!');
+        }
+        switch (width) {
+            case OperationSize.byte:
+                value = BigInt(this.dv.getUint8(this.bytei));
+                this.bytei += 1;
+                break;
+            case OperationSize.word:
+                value = BigInt(this.dv.getUint16(this.bytei, true));
+                this.bytei += 2;
+                break;
+            case OperationSize.dword:
+                value = BigInt(this.dv.getUint32(this.bytei, true));
+                this.bytei += 4;
+                break;
+        }
+
+        this.instruction.operands.push({relativeOffset: {value, width}});
+    }
+
     parseImmediate1632Or64AsOperand(maxImmediateSize: OperationSize): void {
+        let value: bigint = 0n;
+        let width = OperationSize.dword;
         if (this.instruction.operandSizeOverride) {
-            this.instruction.operands.push({int: this.dv.getUint16(this.bytei, true)});
+            value = BigInt(this.dv.getUint16(this.bytei, true));
+            width = OperationSize.word;
             this.bytei += 2;
         } else if (this.instruction.rex && this.instruction.rex.w) {
             if (maxImmediateSize === OperationSize.dword) {
-                this.instruction.operands.push({int: this.dv.getUint32(this.bytei, true)});
+                value = BigInt(this.dv.getUint32(this.bytei, true));
                 this.bytei += 4;
             } else if (maxImmediateSize === OperationSize.word) {
-                this.instruction.operands.push({int: this.dv.getUint16(this.bytei, true)});
+                value = BigInt(this.dv.getUint16(this.bytei, true));
+                width = OperationSize.word;
                 this.bytei += 2;
             } else {
-                this.instruction.operands.push({bigInt: this.dv.getBigUint64(this.bytei, true)});
+                value = this.dv.getBigUint64(this.bytei, true);
+                width = OperationSize.qword;
                 this.bytei += 8;
             }
         } else {
-            this.instruction.operands.push({int: this.dv.getUint32(this.bytei, true)});
+            value = BigInt(this.dv.getUint32(this.bytei, true));
             this.bytei += 4;
         }
+
+        this.instruction.operands.push({immediate: {value, width}});
     }
 
     getNextImmediate8(): number {
@@ -398,7 +433,12 @@ export class InstructionParser {
     }
 
     parseImmediate8AsOperand(): void {
-        this.instruction.operands.push({int: this.getNextImmediate8()});
+        this.instruction.operands.push({
+            immediate: {
+                value: BigInt(this.getNextImmediate8()),
+                width: OperationSize.byte
+            }
+        });
     }
 
     getRegisterInOpCode8(mask: number): Register {
@@ -736,10 +776,27 @@ export class InstructionParser {
                         this.parseImmediate1632Or64AsOperand(maxImmediateSize);
                     }
                 }
+                if (id.opCode.codeOffsetSize !== undefined) {
+                    let maxCodeOffsetSize = OperationSize.byte;
+                    for (let op of allOps) {
+                        if (op.opCode.codeOffsetSize !== undefined && op.opCode.codeOffsetSize > maxCodeOffsetSize) {
+                            maxCodeOffsetSize = op.opCode.codeOffsetSize;
+                        }
+                    }
+                    if (id.opCode.codeOffsetSize === OperationSize.byte) {
+                        this.parseRelativeOffsetAsOperand(maxCodeOffsetSize);
+                    } else {
+                        this.parseRelativeOffsetAsOperand(maxCodeOffsetSize);
+                    }
+                }
                 break;
             } else {
                 this.bytei = instructionBeginI;
             }
+        }
+
+        if (this.instruction.type === InstructionType.none) {
+            throw new Error('Instruction unsupported.');
         }
 
         this.instruction.length = this.bytei - start;
@@ -763,6 +820,7 @@ export class InstructionParser {
                 return false;
         }
     }
+
     private isUnsupportedInstruction(id: InstructionDefinition) {
         const operands = id.mnemonic.operands;
         for (const operand of operands) {
