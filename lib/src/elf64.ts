@@ -28,14 +28,14 @@ export interface ELF64Header {
     machine: number;
     version: Version;
     entry: number;
-    phoff: number;
-    shoff: number;
+    programHeadersOffset: number;
+    sectionHeadersOffset: number;
     flags: number;
-    ehsize: number;
-    phentsize: number;
-    phnum: number;
-    shentsize: number;
-    shnum: number;
+    elfHeaderSize: number;
+    programHeadersSize: number;
+    programHeadersNumber: number;
+    sectionHeadersSize: number;
+    sectionHeadersNumber: number;
     shstrndx: number;
 }
 
@@ -43,16 +43,31 @@ export interface ProgramHeader {
     type: number;
     flags: number;
     offset: number;
-    vaddr: number;
-    paddr: number;
+    virtualAddress: number;
+    physicalAddress: number;
     filesz: number;
     memsz: number;
     align: number;
 }
 
+export interface SectionHeader {
+    nameIndex: number;
+    name: string;
+    type: number;
+    flags: bigint;
+    addr: bigint;
+    offset: bigint;
+    size: bigint;
+    link: number;
+    info: number;
+    addressAlignment: bigint;
+    entsize: bigint;
+}
+
 export interface ELF64 {
     header: ELF64Header;
     programHeaders: ProgramHeader[];
+    sectionHeaders: SectionHeader[];
     bytes: ArrayBuffer;
 }
 

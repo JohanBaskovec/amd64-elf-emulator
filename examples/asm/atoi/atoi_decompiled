@@ -1,6 +1,26 @@
 
 atoi:     file format elf64-x86-64
 
+Sections:
+Idx Name          Size      VMA               LMA               File off  Algn
+  0 .text         00000057  0000000000401000  0000000000401000  00001000  2**4
+                  CONTENTS, ALLOC, LOAD, READONLY, CODE
+  1 .data         00000003  0000000000402000  0000000000402000  00002000  2**2
+                  CONTENTS, ALLOC, LOAD, DATA
+  2 .debug_aranges 00000030  0000000000000000  0000000000000000  00002003  2**0
+                  CONTENTS, READONLY, DEBUGGING, OCTETS
+  3 .debug_pubnames 00000012  0000000000000000  0000000000000000  00002033  2**0
+                  CONTENTS, READONLY, DEBUGGING, OCTETS
+  4 .debug_info   0000004a  0000000000000000  0000000000000000  00002045  2**0
+                  CONTENTS, READONLY, DEBUGGING, OCTETS
+  5 .debug_abbrev 0000001b  0000000000000000  0000000000000000  0000208f  2**0
+                  CONTENTS, READONLY, DEBUGGING, OCTETS
+  6 .debug_line   00000051  0000000000000000  0000000000000000  000020aa  2**0
+                  CONTENTS, READONLY, DEBUGGING, OCTETS
+  7 .debug_frame  00000004  0000000000000000  0000000000000000  00002100  2**3
+                  CONTENTS, READONLY, DEBUGGING, OCTETS
+  8 .debug_loc    00000010  0000000000000000  0000000000000000  00002104  2**0
+                  CONTENTS, READONLY, DEBUGGING, OCTETS
 
 Disassembly of section .text:
 
@@ -13,18 +33,18 @@ Disassembly of section .text:
   40100e:	b9 01 00 00 00       	mov    ecx,0x1
 
 0000000000401013 <atoi.next_char>:
-  401013:	46 8a 04 0f          	mov    r8b,BYTE PTR [rdi+r9*1]
-  401017:	41 80 e8 30          	sub    r8b,0x30
-  40101b:	4d 0f b6 d0          	movzx  r10,r8b
-  40101f:	4c 0f af d1          	imul   r10,rcx
-  401023:	4c 01 d0             	add    rax,r10
-  401026:	48 6b c9 0a          	imul   rcx,rcx,0xa
-  40102a:	49 83 e9 01          	sub    r9,0x1
-  40102e:	49 83 f9 00          	cmp    r9,0x0
-  401032:	7d df                	jge    401013 <atoi.next_char>
-  401034:	48 89 ec             	mov    rsp,rbp
-  401037:	5d                   	pop    rbp
-  401038:	c3                   	ret    
+  401013:	/-> 46 8a 04 0f          	mov    r8b,BYTE PTR [rdi+r9*1]
+  401017:	|   41 80 e8 30          	sub    r8b,0x30
+  40101b:	|   4d 0f b6 d0          	movzx  r10,r8b
+  40101f:	|   4c 0f af d1          	imul   r10,rcx
+  401023:	|   4c 01 d0             	add    rax,r10
+  401026:	|   48 6b c9 0a          	imul   rcx,rcx,0xa
+  40102a:	|   49 83 e9 01          	sub    r9,0x1
+  40102e:	|   49 83 f9 00          	cmp    r9,0x0
+  401032:	\-- 7d df                	jge    401013 <atoi.next_char>
+  401034:	    48 89 ec             	mov    rsp,rbp
+  401037:	    5d                   	pop    rbp
+  401038:	    c3                   	ret    
 
 0000000000401039 <_start>:
   401039:	48 bf 00 20 40 00 00 	movabs rdi,0x402000
@@ -34,125 +54,3 @@ Disassembly of section .text:
   40104d:	48 89 c7             	mov    rdi,rax
   401050:	b8 3c 00 00 00       	mov    eax,0x3c
   401055:	0f 05                	syscall 
-
-Disassembly of section .data:
-
-0000000000402000 <number>:
-  402000:	31 33                	xor    DWORD PTR [rbx],esi
-  402002:	35                   	.byte 0x35
-
-Disassembly of section .debug_aranges:
-
-0000000000000000 <.debug_aranges>:
-   0:	2c 00                	sub    al,0x0
-   2:	00 00                	add    BYTE PTR [rax],al
-   4:	03 00                	add    eax,DWORD PTR [rax]
-   6:	00 00                	add    BYTE PTR [rax],al
-   8:	00 00                	add    BYTE PTR [rax],al
-   a:	08 00                	or     BYTE PTR [rax],al
-   c:	00 00                	add    BYTE PTR [rax],al
-   e:	00 00                	add    BYTE PTR [rax],al
-  10:	00 10                	add    BYTE PTR [rax],dl
-  12:	40 00 00             	add    BYTE PTR [rax],al
-  15:	00 00                	add    BYTE PTR [rax],al
-  17:	00 57 00             	add    BYTE PTR [rdi+0x0],dl
-	...
-
-Disassembly of section .debug_pubnames:
-
-0000000000000000 <.debug_pubnames>:
-   0:	0e                   	(bad)  
-   1:	00 00                	add    BYTE PTR [rax],al
-   3:	00 03                	add    BYTE PTR [rbx],al
-	...
-
-Disassembly of section .debug_info:
-
-0000000000000000 <.debug_info>:
-   0:	46 00 00             	rex.RX add BYTE PTR [rax],r8b
-   3:	00 03                	add    BYTE PTR [rbx],al
-   5:	00 00                	add    BYTE PTR [rax],al
-   7:	00 00                	add    BYTE PTR [rax],al
-   9:	00 08                	add    BYTE PTR [rax],cl
-   b:	01 00                	add    DWORD PTR [rax],eax
-   d:	10 40 00             	adc    BYTE PTR [rax+0x0],al
-  10:	00 00                	add    BYTE PTR [rax],al
-  12:	00 00                	add    BYTE PTR [rax],al
-  14:	57                   	push   rdi
-  15:	10 40 00             	adc    BYTE PTR [rax+0x0],al
-	...
-  20:	61                   	(bad)  
-  21:	74 6f                	je     92 <atoi-0x400f6e>
-  23:	69 2e 61 73 6d 00    	imul   ebp,DWORD PTR [rsi],0x6d7361
-  29:	4e                   	rex.WRX
-  2a:	41 53                	push   r11
-  2c:	4d 20 32             	rex.WRB and BYTE PTR [r10],r14b
-  2f:	2e 31 34 2e          	xor    DWORD PTR cs:[rsi+rbp*1],esi
-  33:	30 32                	xor    BYTE PTR [rdx],dh
-  35:	00 01                	add    BYTE PTR [rcx],al
-  37:	80 02 00             	add    BYTE PTR [rdx],0x0
-  3a:	10 40 00             	adc    BYTE PTR [rax+0x0],al
-	...
-
-Disassembly of section .debug_abbrev:
-
-0000000000000000 <.debug_abbrev>:
-   0:	01 11                	add    DWORD PTR [rcx],edx
-   2:	01 11                	add    DWORD PTR [rcx],edx
-   4:	01 12                	add    DWORD PTR [rdx],edx
-   6:	01 10                	add    DWORD PTR [rax],edx
-   8:	06                   	(bad)  
-   9:	03 08                	add    ecx,DWORD PTR [rax]
-   b:	25 08 13 05 00       	and    eax,0x51308
-  10:	00 02                	add    BYTE PTR [rdx],al
-  12:	2e 00 11             	add    BYTE PTR cs:[rcx],dl
-  15:	01 40 06             	add    DWORD PTR [rax+0x6],eax
-  18:	00 00                	add    BYTE PTR [rax],al
-	...
-
-Disassembly of section .debug_line:
-
-0000000000000000 <.debug_line>:
-   0:	4d 00 00             	rex.WRB add BYTE PTR [r8],r8b
-   3:	00 03                	add    BYTE PTR [rbx],al
-   5:	00 1f                	add    BYTE PTR [rdi],bl
-   7:	00 00                	add    BYTE PTR [rax],al
-   9:	00 01                	add    BYTE PTR [rcx],al
-   b:	01 fb                	add    ebx,edi
-   d:	0e                   	(bad)  
-   e:	0d 00 01 01 01       	or     eax,0x1010100
-  13:	01 00                	add    DWORD PTR [rax],eax
-  15:	00 00                	add    BYTE PTR [rax],al
-  17:	01 00                	add    DWORD PTR [rax],eax
-  19:	00 01                	add    BYTE PTR [rcx],al
-  1b:	00 61 74             	add    BYTE PTR [rcx+0x74],ah
-  1e:	6f                   	outs   dx,DWORD PTR ds:[rsi]
-  1f:	69 2e 61 73 6d 00    	imul   ebp,DWORD PTR [rsi],0x6d7361
-  25:	00 00                	add    BYTE PTR [rax],al
-  27:	00 00                	add    BYTE PTR [rax],al
-  29:	00 09                	add    BYTE PTR [rcx],cl
-  2b:	02 00                	add    al,BYTE PTR [rax]
-  2d:	10 40 00             	adc    BYTE PTR [rax+0x0],al
-  30:	00 00                	add    BYTE PTR [rax],al
-  32:	00 00                	add    BYTE PTR [rax],al
-  34:	1a 21                	sbb    ah,BYTE PTR [rcx]
-  36:	3f                   	(bad)  
-  37:	3d 4b 3e 5c 4b       	cmp    eax,0x4b5c3e4b
-  3c:	4b                   	rex.WXB
-  3d:	4b                   	rex.WXB
-  3e:	4b 3d 4b 4b 4b 30    	rex.WXB cmp rax,0x304b4b4b
-  44:	3d 22 23 9f 59       	cmp    eax,0x599f2322
-  49:	5a                   	pop    rdx
-  4a:	3d 59 02 02 00       	cmp    eax,0x20259
-  4f:	01 01                	add    DWORD PTR [rcx],eax
-
-Disassembly of section .debug_frame:
-
-0000000000000000 <.debug_frame>:
-   0:	00 00                	add    BYTE PTR [rax],al
-	...
-
-Disassembly of section .debug_loc:
-
-0000000000000000 <.debug_loc>:
-	...

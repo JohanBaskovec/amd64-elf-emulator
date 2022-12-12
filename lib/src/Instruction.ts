@@ -1,4 +1,4 @@
-import {OperationSize, Register} from "./amd64-architecture";
+import {maxes, OperationSize, Register, signBitMask} from "./amd64-architecture";
 
 export enum OperandModRMOrder {
     regFirstRmSecond,
@@ -40,12 +40,38 @@ export type EffectiveAddress = {
 }
 
 export type Immediate = {
+    valueUnsigned: bigint,
+    valueSigned: bigint,
+    width: OperationSize,
+}
+
+export type JsBigIntAndWidth = {
     value: bigint,
     width: OperationSize,
 }
 
+export function immediateFromJsBigIntAndWidth(jsValueAndWidth: JsBigIntAndWidth): Immediate {
+    let valueUnsigned: bigint = jsValueAndWidth.value;
+    let valueSigned: bigint = jsValueAndWidth.value;
+    const width = jsValueAndWidth.width;
+
+    if (jsValueAndWidth.value < 0n) {
+        const max = maxes[width];
+        valueUnsigned = valueSigned + max;
+    } else if (jsValueAndWidth.value & signBitMask[width]) {
+        const max = maxes[width];
+        valueSigned = jsValueAndWidth.value - max - 1n;
+    }
+    return {
+        valueUnsigned,
+        valueSigned,
+        width,
+    }
+}
+
 export type RelativeOffset = {
-    value: bigint,
+    valueUnsigned: bigint,
+    valueSigned: bigint,
     width: OperationSize,
 }
 
@@ -67,36 +93,71 @@ export type InstructionRaw = {
     rex?: REXPrefix;
     modRM?: ModRM;
     sib?: SIB;
+    bytes: ArrayBuffer;
 }
 
 export type Instruction = {
     type: InstructionType;
     operands: Operand[];
-    length: number;
-    address?: number;
+    length?: number;
+    virtualAddress?: number;
+    raw?: InstructionRaw;
 }
 
 export function instructionFormat(instruction: Instruction): object {
-    const r = {
+    let bytesStr = "";
+    if (instruction.raw !== undefined) {
+        const bytes = new DataView(instruction.raw.bytes);
+        for (let i = 0; i < bytes.byteLength; i++) {
+            const byte = bytes.getUint8(i);
+            let hex = byte.toString(16);
+            if (hex.length === 1) {
+                hex = '0' + hex;
+            }
+            bytesStr += hex;
+            if (i !== bytes.byteLength - 1) {
+                bytesStr += ' ';
+            }
+        }
+    }
+    const ret: any = {
         type: InstructionType[instruction.type],
         operands: instruction.operands.map(operand => {
-            let effectiveAddress = undefined;
+            let retOperand: any = {};
             if (operand.effectiveAddr !== undefined) {
-                effectiveAddress = {
+                let effectiveAddress: any = {
                     base: operand.effectiveAddr.base ? Register[operand.effectiveAddr.base] : null,
                     index: operand.effectiveAddr.index ? Register[operand.effectiveAddr.index] : null,
                     displacement: operand.effectiveAddr.displacement,
                     scaleFactor: operand.effectiveAddr.scaleFactor,
                 }
+                retOperand.effectiveAddr = effectiveAddress;
             }
-            return {
-                address: operand.address ? operand.address.toString(16): undefined,
-                register: operand.register ? Register[operand.register] : undefined,
-                effectiveAddress: effectiveAddress,
-                immediate: operand.immediate ? operand.immediate : undefined,
+            if (operand.address !== undefined) {
+                retOperand.address = operand.address.toString(16);
             }
+            if (operand.register !== undefined) {
+                retOperand.register = Register[operand.register];
+            }
+            if (operand.immediate !== undefined) {
+                retOperand.immediate = {
+                    width: OperationSize[operand.immediate.width],
+                    valueSigned: operand.immediate.valueSigned,
+                    valueUnsigned: operand.immediate.valueUnsigned,
+                };
+            }
+            return retOperand;
         }),
-        length: instruction.length,
+        bytes: bytesStr,
     };
-    return r;
+    if (instruction.length !== undefined) {
+        ret.length = instruction.length;
+    }
+    if (instruction.virtualAddress !== undefined) {
+        ret.virtualAddress = instruction.virtualAddress;
+        ret.virtualAddressHex = instruction.virtualAddress.toString(16);
+    }
+    return ret;
 }
+
+export type InstructionByAddress = { [addr: number]: Instruction };

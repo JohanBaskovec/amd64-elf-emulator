@@ -33,7 +33,7 @@ function run() {
       writeToConsole('$ ./hello_world');
       vm.addWriteSystemCallListener((l: string) => writeToConsole(l));
       vm.addExitSystemCallListener((code) => writeToConsole('Process finished with code ' + code));
-      vm.runElf64Executable(content);
+      vm.runElf64ExecutableFromBinary(content);
     }
   }
 }

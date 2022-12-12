@@ -529,3 +529,17 @@ export const opCodeToModRmRegRegisterMap: { [type in RegisterType]: ModRmRegRegi
         [ModRMReg.r15_MMX15_XMM15_YMM15]: r15WidthMap,
     }
 };
+
+export const maxes = {
+    [OperationSize.byte]: 255n,
+    [OperationSize.word]: 65535n,
+    [OperationSize.dword]: 4294967295n,
+    [OperationSize.qword]: 18446744073709551615n,
+}
+
+export const signBitMask = {
+    [OperationSize.byte]: 0x80n,
+    [OperationSize.word]: 0x8000n,
+    [OperationSize.dword]: 0x80000000n,
+    [OperationSize.qword]: 0x8000000000000000n,
+}

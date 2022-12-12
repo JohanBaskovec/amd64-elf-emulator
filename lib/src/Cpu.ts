@@ -23,19 +23,6 @@ type ValueWithWidth = {
 
 const stackMaxSize = 2000000;
 
-const maxes = {
-    [OperationSize.byte]: 255n,
-    [OperationSize.word]: 65535n,
-    [OperationSize.dword]: 4294967295n,
-    [OperationSize.qword]: 18446744073709551615n,
-}
-
-const signByteMask = {
-    [OperationSize.byte]: 0x80n,
-    [OperationSize.word]: 0x8000n,
-    [OperationSize.dword]: 0x80000000n,
-    [OperationSize.qword]: 0x8000000000000000n,
-}
 
 export class Cpu {
     private registers: { [key in Register64]: DataView } = {
@@ -63,7 +50,7 @@ export class Cpu {
     private rip: number = 0;
 
     // RFLAGS
-    private addrOffset: number = 0;
+    addrOffset: number = 0;
     private emulator: Emulator;
     private zeroFlag: boolean = false;
     private overflowFlag: boolean = false;
@@ -325,15 +312,15 @@ Data in the DataView (big endian!):
             return this.readValueRegister(operand.register, signed);
         } else if (operand.immediate !== undefined) {
             if (signed) {
-                return this.interpretAsSigned(operand.immediate.value, operand.immediate.width);
+                return operand.immediate.valueSigned;
             } else {
-                return operand.immediate.value;
+                return operand.immediate.valueUnsigned;
             }
         } else if (operand.relativeOffset !== undefined) {
             if (signed) {
-                return this.interpretAsSigned(operand.relativeOffset.value, operand.relativeOffset.width);
+                return operand.relativeOffset.valueSigned;
             } else {
-                return operand.relativeOffset.value;
+                return operand.relativeOffset.valueUnsigned;
             }
         } else if (operand.effectiveAddr !== undefined) {
             const ea: EffectiveAddress = operand.effectiveAddr;
@@ -642,14 +629,6 @@ Data in the DataView (big endian!):
         }
     }
 
-    private interpretAsSigned(number: bigint, width: OperationSize): bigint {
-        if (number & signByteMask[width]) {
-            return number - maxes[width] - 1n;
-        } else {
-            return number;
-        }
-    }
-
     private doJGE(dataView: DataView, instruction: Instruction): void {
         if (this.overflowFlag === this.signFlag) {
             const offset: bigint = this.readSignedValueFromOperand(dataView, instruction.operands[0]);
@@ -674,6 +653,7 @@ Data in the DataView (big endian!):
         }
         this.setUnsignedRegisterValue(Register.RSP, newRsp);
     }
+
     private doSYSCALL(dataView: DataView, instruction: Instruction): void {
         const code = this.readValueRegister(Register.RAX, false);
         //console.log(`System call code ${code}`);
@@ -700,7 +680,9 @@ Data in the DataView (big endian!):
 
 
     execute(dataView: DataView, instruction: Instruction) {
-        this.rip += instruction.length;
+        if (instruction.length !== undefined) {
+            this.rip += instruction.length;
+        }
         //console.log(instructionFormat(instruction));
         switch (instruction.type) {
             case InstructionType.XOR:

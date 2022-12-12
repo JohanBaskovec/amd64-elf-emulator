@@ -1,5 +1,5 @@
 import {InstructionParser} from "../InstructionParser";
-import {Instruction, InstructionType, Operand} from "../Instruction";
+import {immediateFromJsBigIntAndWidth, Instruction, InstructionType, Operand} from "../Instruction";
 import {OperationSize, Register} from "../amd64-architecture";
 
 function parseAndAssert(bytes: number[] | string, operands: Operand[], type: InstructionType) {
@@ -11,7 +11,7 @@ function parseAndAssert(bytes: number[] | string, operands: Operand[], type: Ins
     const uint8Array = Uint8Array.from(bytes)
     const dataView = new DataView(uint8Array.buffer);
 
-    const parser = new InstructionParser(dataView, 0);
+    const parser = new InstructionParser(dataView, 0, 0);
     const instruction: Instruction = parser.parse();
     expect(instruction.type).toBe(type);
     expect(instruction.length).toBe(bytes.length);
@@ -29,224 +29,254 @@ function strToByteArray(str: string): number[] {
 test('parse MOV', () => {
     // MOV qword to register
     parseAndAssertMOV("48 b8 c7 11 62 b3 02 01 00 00", [{register: Register.RAX}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 1111111111111n,
             width: OperationSize.qword
-        }
+        })
     }]);
     parseAndAssertMOV("48 bb c7 11 62 b3 02 01 00 00", [{register: Register.RBX}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 1111111111111n,
             width: OperationSize.qword
-        }
+        })
     }]);
     parseAndAssertMOV("48 b9 c7 11 62 b3 02 01 00 00", [{register: Register.RCX}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 1111111111111n,
             width: OperationSize.qword
-        }
+        })
     }]);
     parseAndAssertMOV("48 ba c7 11 62 b3 02 01 00 00", [{register: Register.RDX}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 1111111111111n,
             width: OperationSize.qword
-        }
+        })
     }]);
     parseAndAssertMOV("48 be c7 11 62 b3 02 01 00 00", [{register: Register.RSI}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 1111111111111n,
             width: OperationSize.qword
-        }
+        })
     }]);
     parseAndAssertMOV("48 bf c7 11 62 b3 02 01 00 00", [{register: Register.RDI}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 1111111111111n,
             width: OperationSize.qword
-        }
+        })
     }]);
     parseAndAssertMOV("48 bd c7 11 62 b3 02 01 00 00", [{register: Register.RBP}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 1111111111111n,
             width: OperationSize.qword
-        }
+        })
     }]);
     parseAndAssertMOV("48 bc c7 11 62 b3 02 01 00 00", [{register: Register.RSP}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 1111111111111n,
             width: OperationSize.qword
-        }
+        })
     }]);
     parseAndAssertMOV("49 b8 c7 11 62 b3 02 01 00 00", [{register: Register.R8}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 1111111111111n,
             width: OperationSize.qword
-        }
+        })
     }]);
     parseAndAssertMOV("49 b9 c7 11 62 b3 02 01 00 00", [{register: Register.R9}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 1111111111111n,
             width: OperationSize.qword
-        }
+        })
     }]);
     parseAndAssertMOV("49 ba c7 11 62 b3 02 01 00 00", [{register: Register.R10}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 1111111111111n,
             width: OperationSize.qword
-        }
+        })
     }]);
     parseAndAssertMOV("49 bb c7 11 62 b3 02 01 00 00", [{register: Register.R11}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 1111111111111n,
             width: OperationSize.qword
-        }
+        })
     }]);
     parseAndAssertMOV("49 bc c7 11 62 b3 02 01 00 00", [{register: Register.R12}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 1111111111111n,
             width: OperationSize.qword
-        }
+        })
     }]);
     parseAndAssertMOV("49 bd c7 11 62 b3 02 01 00 00", [{register: Register.R13}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 1111111111111n,
             width: OperationSize.qword
-        }
+        })
     }]);
     parseAndAssertMOV("49 be c7 11 62 b3 02 01 00 00", [{register: Register.R14}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 1111111111111n,
             width: OperationSize.qword
-        }
+        })
     }]);
     parseAndAssertMOV("49 bf c7 11 62 b3 02 01 00 00", [{register: Register.R15}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 1111111111111n,
             width: OperationSize.qword
-        }
+        })
     }]);
 
     // MOV dword to register
     parseAndAssertMOV("b8 01 00 00 00", [{register: Register.EAX}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 1n,
             width: OperationSize.dword
-        }
+        })
     }]);
     parseAndAssertMOV("bb 01 00 00 00", [{register: Register.EBX}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 1n,
             width: OperationSize.dword
-        }
+        })
     }]);
     parseAndAssertMOV("b9 01 00 00 00", [{register: Register.ECX}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 1n,
             width: OperationSize.dword
-        }
+        })
     }]);
     parseAndAssertMOV("ba 01 00 00 00", [{register: Register.EDX}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 1n,
             width: OperationSize.dword
-        }
+        })
     }]);
     parseAndAssertMOV("be 01 00 00 00", [{register: Register.ESI}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 1n,
             width: OperationSize.dword
-        }
+        })
     }]);
     parseAndAssertMOV("bf 01 00 00 00", [{register: Register.EDI}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 1n,
             width: OperationSize.dword
-        }
+        })
     }]);
     parseAndAssertMOV("bd 01 00 00 00", [{register: Register.EBP}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 1n,
             width: OperationSize.dword
-        }
+        })
     }]);
     parseAndAssertMOV("bc 01 00 00 00", [{register: Register.ESP}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 1n,
             width: OperationSize.dword
-        }
+        })
     }]);
     parseAndAssertMOV("41 b8 01 00 00 00", [{register: Register.R8D}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 1n,
             width: OperationSize.dword
-        }
+        })
     }]);
     parseAndAssertMOV("41 b9 01 00 00 00", [{register: Register.R9D}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 1n,
             width: OperationSize.dword
-        }
+        })
     }]);
     parseAndAssertMOV("41 ba 01 00 00 00", [{register: Register.R10D}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 1n,
             width: OperationSize.dword
-        }
+        })
     }]);
     parseAndAssertMOV("41 bb 01 00 00 00", [{register: Register.R11D}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 1n,
             width: OperationSize.dword
-        }
+        })
     }]);
     parseAndAssertMOV("41 bc 01 00 00 00", [{register: Register.R12D}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 1n,
             width: OperationSize.dword
-        }
+        })
     }]);
     parseAndAssertMOV("41 bd 01 00 00 00", [{register: Register.R13D}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 1n,
             width: OperationSize.dword
-        }
+        })
     }]);
     parseAndAssertMOV("41 be 01 00 00 00", [{register: Register.R14D}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 1n,
             width: OperationSize.dword
-        }
+        })
     }]);
     parseAndAssertMOV("41 bf 01 00 00 00", [{register: Register.R15D}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 1n,
             width: OperationSize.dword
-        }
+        })
     }]);
 
     // MOV word to register
-    parseAndAssertMOV("66 b8 04 00", [{register: Register.AX}, {immediate: {value: 4n, width: OperationSize.word}}]);
-    parseAndAssertMOV("66 bb 04 00", [{register: Register.BX}, {immediate: {value: 4n, width: OperationSize.word}}]);
-    parseAndAssertMOV("66 b9 04 00", [{register: Register.CX}, {immediate: {value: 4n, width: OperationSize.word}}]);
-    parseAndAssertMOV("66 ba 04 00", [{register: Register.DX}, {immediate: {value: 4n, width: OperationSize.word}}]);
-    parseAndAssertMOV("66 be 04 00", [{register: Register.SI}, {immediate: {value: 4n, width: OperationSize.word}}]);
-    parseAndAssertMOV("66 bf 04 00", [{register: Register.DI}, {immediate: {value: 4n, width: OperationSize.word}}]);
-    parseAndAssertMOV("66 41 b8 04 00", [{register: Register.R8W}, {
-        immediate: {
+    parseAndAssertMOV("66 b8 04 00", [{register: Register.AX}, {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 4n,
             width: OperationSize.word
-        }
+        })
+    }]);
+    parseAndAssertMOV("66 bb 04 00", [{register: Register.BX}, {
+        immediate: immediateFromJsBigIntAndWidth({
+            value: 4n,
+            width: OperationSize.word
+        })
+    }]);
+    parseAndAssertMOV("66 b9 04 00", [{register: Register.CX}, {
+        immediate: immediateFromJsBigIntAndWidth({
+            value: 4n,
+            width: OperationSize.word
+        })
+    }]);
+    parseAndAssertMOV("66 ba 04 00", [{register: Register.DX}, {
+        immediate: immediateFromJsBigIntAndWidth({
+            value: 4n,
+            width: OperationSize.word
+        })
+    }]);
+    parseAndAssertMOV("66 be 04 00", [{register: Register.SI}, {
+        immediate: immediateFromJsBigIntAndWidth({
+            value: 4n,
+            width: OperationSize.word
+        })
+    }]);
+    parseAndAssertMOV("66 bf 04 00", [{register: Register.DI}, {
+        immediate: immediateFromJsBigIntAndWidth({
+            value: 4n,
+            width: OperationSize.word
+        })
+    }]);
+    parseAndAssertMOV("66 41 b8 04 00", [{register: Register.R8W}, {
+        immediate: immediateFromJsBigIntAndWidth({
+            value: 4n,
+            width: OperationSize.word
+        })
     }]);
     parseAndAssertMOV("66 41 b9 04 00", [{register: Register.R9W}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 4n,
             width: OperationSize.word
-        }
+        })
     }]);
     parseAndAssertMOV("66 41 bf 04 00", [{register: Register.R15W}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 4n,
             width: OperationSize.word
-        }
+        })
     }]);
 
     // MOV qword register to register
@@ -497,44 +527,44 @@ test('parse XOR', () => {
             register: Register.RDI
         },
         {
-            immediate: {value: 0x1388n, width: OperationSize.dword}
+            immediate: immediateFromJsBigIntAndWidth({value: 0x1388n, width: OperationSize.dword})
         },
     ], InstructionType.XOR);
 
     // xor al, 44
     // XOR AL, imm8
     parseAndAssert("34 2c", [{register: Register.AL}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 44n,
             width: OperationSize.byte
-        }
+        })
     }], InstructionType.XOR);
 
     // xor ax, 433
     // XOR AX, imm16
     parseAndAssert("66 35 b1 01", [{register: Register.AX}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 433n,
             width: OperationSize.word
-        }
+        })
     }], InstructionType.XOR);
 
     // xor dword eax, 433
     // XOR EAX, imm32
     parseAndAssert("35 b1 01 00 00", [{register: Register.EAX}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 433n,
             width: OperationSize.dword
-        }
+        })
     }], InstructionType.XOR);
 
     // xor dword rax, 433
     // XOR RAX, imm32
     parseAndAssert("48 35 b1 01 00 00", [{register: Register.RAX}, {
-        immediate: {
+        immediate: immediateFromJsBigIntAndWidth({
             value: 433n,
             width: OperationSize.dword
-        }
+        })
     }], InstructionType.XOR);
 
     // xor byte [datab], 4
@@ -547,36 +577,51 @@ test('parse XOR', () => {
             index: null,
             scaleFactor: 1
         }
-    }, {immediate: {value: 4n, width: OperationSize.byte}}], InstructionType.XOR);
+    }, {immediate: immediateFromJsBigIntAndWidth({value: 4n, width: OperationSize.byte})}], InstructionType.XOR);
 
 
     // xor si, 435
     // XOR reg/mem16, imm16
     parseAndAssert("66 81 f6 b3 01", [{
         register: Register.SI
-    }, {immediate: {value: 435n, width: OperationSize.word}}], InstructionType.XOR);
+    }, {immediate: immediateFromJsBigIntAndWidth({value: 435n, width: OperationSize.word})}], InstructionType.XOR);
 
     // xor esi, 435
     // XOR reg/mem32, imm32
     parseAndAssert("81 f6 b3 01 00 00", [{
         register: Register.ESI
-    }, {immediate: {value: 435n, width: OperationSize.dword}}], InstructionType.XOR);
+    }, {immediate: immediateFromJsBigIntAndWidth({value: 435n, width: OperationSize.dword})}], InstructionType.XOR);
 
     // xor rsi, 435
     // XOR reg/mem64, imm32
     parseAndAssert("48 81 f6 b3 01 00 00", [{
         register: Register.RSI
-    }, {immediate: {value: 435n, width: OperationSize.dword}}], InstructionType.XOR);
+    }, {immediate: immediateFromJsBigIntAndWidth({value: 435n, width: OperationSize.dword})}], InstructionType.XOR);
 
     // xor ax, 44
     // XOR reg/mem16, imm8
-    parseAndAssert("66 83 f0 2c", [{register: Register.AX}, {immediate: {value: 44n, width: OperationSize.byte}}], InstructionType.XOR);
+    parseAndAssert("66 83 f0 2c", [{register: Register.AX}, {
+        immediate: immediateFromJsBigIntAndWidth({
+            value: 44n,
+            width: OperationSize.byte
+        })
+    }], InstructionType.XOR);
     // xor eax, 44
     // XOR reg/mem32, imm8
-    parseAndAssert("83 f0 2c", [{register: Register.EAX}, {immediate: {value: 44n, width: OperationSize.byte}}], InstructionType.XOR);
+    parseAndAssert("83 f0 2c", [{register: Register.EAX}, {
+        immediate: immediateFromJsBigIntAndWidth({
+            value: 44n,
+            width: OperationSize.byte
+        })
+    }], InstructionType.XOR);
     // xor rax, 44
     // XOR reg/mem64, imm8
-    parseAndAssert("48 83 f0 2c", [{register: Register.RAX}, {immediate: {value: 44n, width: OperationSize.byte}}], InstructionType.XOR);
+    parseAndAssert("48 83 f0 2c", [{register: Register.RAX}, {
+        immediate: immediateFromJsBigIntAndWidth({
+            value: 44n,
+            width: OperationSize.byte
+        })
+    }], InstructionType.XOR);
 
 
     // xor r8b, r9b
@@ -649,47 +694,102 @@ test('parse XOR', () => {
 test('parse ADD', () => {
     // add al, 8
     // ADD AL, imm8
-    parseAndAssert("04 08", [{register: Register.AL}, {immediate: {value: 8n, width: OperationSize.byte}}], InstructionType.ADD);
+    parseAndAssert("04 08", [{register: Register.AL}, {
+        immediate: immediateFromJsBigIntAndWidth({
+            value: 8n,
+            width: OperationSize.byte
+        })
+    }], InstructionType.ADD);
 
     // add ax, 257
     // ADD AX, imm16
-    parseAndAssert("66 05 01 01", [{register: Register.AX}, {immediate: {value: 257n, width: OperationSize.word}}], InstructionType.ADD);
+    parseAndAssert("66 05 01 01", [{register: Register.AX}, {
+        immediate: immediateFromJsBigIntAndWidth({
+            value: 257n,
+            width: OperationSize.word
+        })
+    }], InstructionType.ADD);
 
     // add eax, 66000
     // ADD EAX, imm32
-    parseAndAssert("05 d0 01 01 00", [{register: Register.EAX}, {immediate: {value: 66000n, width: OperationSize.dword}}], InstructionType.ADD);
+    parseAndAssert("05 d0 01 01 00", [{register: Register.EAX}, {
+        immediate: immediateFromJsBigIntAndWidth({
+            value: 66000n,
+            width: OperationSize.dword
+        })
+    }], InstructionType.ADD);
 
     // add rax, 66000
     // ADD RAX, imm32
-    parseAndAssert("48 05 d0 01 01 00", [{register: Register.RAX}, {immediate: {value: 66000n, width: OperationSize.dword}}], InstructionType.ADD);
+    parseAndAssert("48 05 d0 01 01 00", [{register: Register.RAX}, {
+        immediate: immediateFromJsBigIntAndWidth({
+            value: 66000n,
+            width: OperationSize.dword
+        })
+    }], InstructionType.ADD);
 
     // add r8b, 3
     // ADD reg/mem8, imm8
-    parseAndAssert("41 80 c0 03", [{register: Register.R8B}, {immediate: {value: 3n, width: OperationSize.byte}}], InstructionType.ADD);
+    parseAndAssert("41 80 c0 03", [{register: Register.R8B}, {
+        immediate: immediateFromJsBigIntAndWidth({
+            value: 3n,
+            width: OperationSize.byte
+        })
+    }], InstructionType.ADD);
 
     // add cx, 257
     // ADD reg/mem16, imm16
-    parseAndAssert("66 81 c1 01 01", [{register: Register.CX}, {immediate: {value: 257n, width: OperationSize.word}}], InstructionType.ADD);
+    parseAndAssert("66 81 c1 01 01", [{register: Register.CX}, {
+        immediate: immediateFromJsBigIntAndWidth({
+            value: 257n,
+            width: OperationSize.word
+        })
+    }], InstructionType.ADD);
 
     // add edx, 66000
     // ADD reg/mem32, imm32
-    parseAndAssert("81 c2 d0 01 01 00", [{register: Register.EDX}, {immediate: {value: 66000n, width: OperationSize.dword}}], InstructionType.ADD);
+    parseAndAssert("81 c2 d0 01 01 00", [{register: Register.EDX}, {
+        immediate: immediateFromJsBigIntAndWidth({
+            value: 66000n,
+            width: OperationSize.dword
+        })
+    }], InstructionType.ADD);
 
     // add r13, 66000
     // ADD reg/mem64, imm32
-    parseAndAssert("49 81 c5 d0 01 01 00", [{register: Register.R13}, {immediate: {value: 66000n, width: OperationSize.dword}}], InstructionType.ADD);
+    parseAndAssert("49 81 c5 d0 01 01 00", [{register: Register.R13}, {
+        immediate: immediateFromJsBigIntAndWidth({
+            value: 66000n,
+            width: OperationSize.dword
+        })
+    }], InstructionType.ADD);
 
     // add r15w, 8
     // ADD reg/mem16, imm8
-    parseAndAssert("66 41 83 c7 08", [{register: Register.R15W}, {immediate: {value: 8n, width: OperationSize.byte}}], InstructionType.ADD);
+    parseAndAssert("66 41 83 c7 08", [{register: Register.R15W}, {
+        immediate: immediateFromJsBigIntAndWidth({
+            value: 8n,
+            width: OperationSize.byte
+        })
+    }], InstructionType.ADD);
 
     // add r14d, 8
     // ADD reg/mem32, imm8
-    parseAndAssert("41 83 c6 08", [{register: Register.R14D}, {immediate: {value: 8n, width: OperationSize.byte}}], InstructionType.ADD);
+    parseAndAssert("41 83 c6 08", [{register: Register.R14D}, {
+        immediate: immediateFromJsBigIntAndWidth({
+            value: 8n,
+            width: OperationSize.byte
+        })
+    }], InstructionType.ADD);
 
     // add r13, 8
     // ADD reg/mem64, imm8
-    parseAndAssert("49 83 c5 08", [{register: Register.R13}, {immediate: {value: 8n, width: OperationSize.byte}}], InstructionType.ADD);
+    parseAndAssert("49 83 c5 08", [{register: Register.R13}, {
+        immediate: immediateFromJsBigIntAndWidth({
+            value: 8n,
+            width: OperationSize.byte
+        })
+    }], InstructionType.ADD);
 
     // add al, r8b
     // ADD reg/mem8, reg8
@@ -795,7 +895,7 @@ test('parse IMUL', () => {
 });
 
 test('parse JGE', () => {
-   parseAndAssert("7d df", [{relativeOffset: {value: 223n, width: OperationSize.byte}}], InstructionType.JGE);
+    parseAndAssert("7d df", [{relativeOffset: immediateFromJsBigIntAndWidth({value: 223n, width: OperationSize.byte})}], InstructionType.JGE);
 });
 
 test('MOVZX', () => {
@@ -822,7 +922,12 @@ test('MOVZX', () => {
 });
 
 test('CALL', () => {
-   parseAndAssert("e8 af ff ff ff", [{immediate: {value: 0xff_ff_ff_afn, width: OperationSize.dword}}], InstructionType.CALL);
+    parseAndAssert("e8 af ff ff ff", [{
+        immediate: immediateFromJsBigIntAndWidth({
+            value: 0xff_ff_ff_afn,
+            width: OperationSize.dword
+        })
+    }], InstructionType.CALL);
 });
 
 test('RET', () => {

@@ -1,4 +1,12 @@
-import {Instruction, InstructionRaw, InstructionType, ModRM, Operand, OperandModRMOrder,} from "./Instruction";
+import {
+    Instruction,
+    instructionFormat,
+    InstructionRaw,
+    InstructionType,
+    ModRM,
+    Operand,
+    OperandModRMOrder,
+} from "./Instruction";
 import {
     canAddressHighByte,
     ModRMReg,
@@ -111,12 +119,15 @@ export class InstructionParser {
         opCode: 0,
         length: 0,
         operands: [],
+        bytes: new ArrayBuffer(0),
     };
     instructionDefinition: InstructionDefinition | undefined = undefined;
+    private addrOffset: number;
 
-    constructor(content: DataView, bytei: number) {
+    constructor(content: DataView, bytei: number, addrOffset: number) {
         this.dv = content;
         this.bytei = bytei;
+        this.addrOffset = addrOffset;
         initInstructionDefinitions();
     }
 
@@ -189,7 +200,7 @@ export class InstructionParser {
                     return 0;
                 }
             case 1:
-                return this.getNextImmediate8();
+                return this.getNextImmediate8().unsigned;
             case 2:
                 return this.getNextImmediate32();
             default:
@@ -363,7 +374,8 @@ export class InstructionParser {
     }
 
     parseRelativeOffsetAsOperand(maxSize: OperationSize): void {
-        let value: bigint = 0n;
+        let valueUnsigned: bigint = 0n;
+        let valueSigned: bigint = 0n;
         let width = OperationSize.dword;
         switch (maxSize) {
             case OperationSize.byte:
@@ -382,60 +394,72 @@ export class InstructionParser {
         }
         switch (width) {
             case OperationSize.byte:
-                value = BigInt(this.dv.getUint8(this.bytei));
+                valueUnsigned = BigInt(this.dv.getUint8(this.bytei));
+                valueSigned = BigInt(this.dv.getInt8(this.bytei));
                 this.bytei += 1;
                 break;
             case OperationSize.word:
-                value = BigInt(this.dv.getUint16(this.bytei, true));
+                valueUnsigned = BigInt(this.dv.getUint16(this.bytei, true));
+                valueSigned = BigInt(this.dv.getInt16(this.bytei, true));
                 this.bytei += 2;
                 break;
             case OperationSize.dword:
-                value = BigInt(this.dv.getUint32(this.bytei, true));
+                valueUnsigned = BigInt(this.dv.getUint32(this.bytei, true));
+                valueSigned = BigInt(this.dv.getInt32(this.bytei, true));
                 this.bytei += 4;
                 break;
         }
 
-        this.instruction.operands.push({relativeOffset: {value, width}});
+        this.instruction.operands.push({relativeOffset: {valueUnsigned, valueSigned, width}});
     }
 
     parseImmediate1632Or64AsOperand(maxImmediateSize: OperationSize): void {
-        let value: bigint = 0n;
+        let valueUnsigned: bigint = 0n;
+        let valueSigned: bigint = 0n;
         let width = OperationSize.dword;
         if (this.instruction.operandSizeOverride) {
-            value = BigInt(this.dv.getUint16(this.bytei, true));
+            valueUnsigned = BigInt(this.dv.getUint16(this.bytei, true));
+            valueSigned = BigInt(this.dv.getInt16(this.bytei, true));
             width = OperationSize.word;
             this.bytei += 2;
         } else if (this.instruction.rex && this.instruction.rex.w) {
             if (maxImmediateSize === OperationSize.dword) {
-                value = BigInt(this.dv.getUint32(this.bytei, true));
+                valueUnsigned = BigInt(this.dv.getUint32(this.bytei, true));
+                valueSigned = BigInt(this.dv.getInt32(this.bytei, true));
                 this.bytei += 4;
             } else if (maxImmediateSize === OperationSize.word) {
-                value = BigInt(this.dv.getUint16(this.bytei, true));
+                valueUnsigned = BigInt(this.dv.getUint16(this.bytei, true));
+                valueSigned = BigInt(this.dv.getInt16(this.bytei, true));
                 width = OperationSize.word;
                 this.bytei += 2;
             } else {
-                value = this.dv.getBigUint64(this.bytei, true);
+                valueUnsigned = this.dv.getBigUint64(this.bytei, true);
+                valueSigned = BigInt(this.dv.getBigInt64(this.bytei, true));
                 width = OperationSize.qword;
                 this.bytei += 8;
             }
         } else {
-            value = BigInt(this.dv.getUint32(this.bytei, true));
+            valueUnsigned = BigInt(this.dv.getUint32(this.bytei, true));
+            valueSigned = BigInt(this.dv.getInt32(this.bytei, true));
             this.bytei += 4;
         }
 
-        this.instruction.operands.push({immediate: {value, width}});
+        this.instruction.operands.push({immediate: {valueUnsigned, valueSigned, width}});
     }
 
-    getNextImmediate8(): number {
-        const byte = this.dv.getUint8(this.bytei);
+    getNextImmediate8(): {signed: number, unsigned: number} {
+        const unsigned = this.dv.getUint8(this.bytei);
+        const signed = this.dv.getInt8(this.bytei);
         this.bytei += 1;
-        return byte;
+        return {unsigned, signed};
     }
 
     parseImmediate8AsOperand(): void {
+        const {signed, unsigned} = this.getNextImmediate8();
         this.instruction.operands.push({
             immediate: {
-                value: BigInt(this.getNextImmediate8()),
+                valueUnsigned: BigInt(unsigned),
+                valueSigned: BigInt(signed),
                 width: OperationSize.byte
             }
         });
@@ -800,10 +824,13 @@ export class InstructionParser {
         }
 
         this.instruction.length = this.bytei - start;
+        this.instruction.bytes = this.dv.buffer.slice(start, this.bytei);
         return {
             type: this.instruction.type,
             length: this.instruction.length,
             operands: this.instruction.operands,
+            raw: this.instruction,
+            virtualAddress: start + this.addrOffset,
         };
     }
 
