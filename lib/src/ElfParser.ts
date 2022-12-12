@@ -1,13 +1,7 @@
 import {BinaryFileReader} from "./BinaryFileReader";
 import {ELF64, ELF64Header, ProgramHeader, SectionHeader, Type} from "./elf64";
-import * as fs from "fs";
 
 export class ElfParser {
-    parseExecutableFromPath(path: string): ELF64 {
-        const fileContent: Buffer = fs.readFileSync(path);
-        return this.parseExecutableFromBytes(fileContent.buffer);
-    }
-
     parseExecutableFromBytes(bytes: ArrayBuffer): ELF64 {
         const dv = new BinaryFileReader(new DataView(bytes));
         if (dv.getUint8() !== 0x7f) {

@@ -3,7 +3,6 @@ import {ELF64} from "./elf64";
 import {Emulator} from "./Emulator";
 import {initInstructionDefinitions} from "./instructions-definitions";
 import {ElfParser} from "./ElfParser";
-import * as fs from "fs";
 
 export class Amd64Emulator extends Emulator {
     process?: Process;
@@ -20,11 +19,6 @@ export class Amd64Emulator extends Emulator {
             this.process.stop();
         }
         this.process = undefined;
-    }
-
-    runElf64ExecutableFromPath(executablePath: string) {
-        const executableContent = fs.readFileSync(executablePath);
-        this.runElf64ExecutableFromBinary(executableContent.buffer);
     }
 
     runElf64ExecutableFromBinary(bytes: ArrayBuffer) {
