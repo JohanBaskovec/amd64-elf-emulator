@@ -1,12 +1,4 @@
-import {
-    Instruction,
-    instructionFormat,
-    InstructionRaw,
-    InstructionType,
-    ModRM,
-    Operand,
-    OperandModRMOrder,
-} from "./Instruction";
+import {Instruction, InstructionRaw, InstructionType, ModRM, Operand, OperandModRMOrder,} from "./Instruction";
 import {
     canAddressHighByte,
     ModRMReg,
@@ -272,7 +264,7 @@ export class InstructionParser {
                 throw new Error("Impossible value for modRM's r/m");
             }
             let width: SubRegisterWidth = SubRegisterWidth.dword;
-            if (this.instruction.rex && this.instruction.rex.w) {
+            if (this.default64MemoryOffset[this.instruction.type] || (this.instruction.rex && this.instruction.rex.w)) {
                 width = SubRegisterWidth.qword;
             } else if (this.instruction.operandSizeOverride) {
                 width = SubRegisterWidth.word;
@@ -447,7 +439,7 @@ export class InstructionParser {
         this.instruction.operands.push({immediate: {valueUnsigned, valueSigned, width}});
     }
 
-    getNextImmediate8(): {signed: number, unsigned: number} {
+    getNextImmediate8(): { signed: number, unsigned: number } {
         const unsigned = this.dv.getUint8(this.bytei);
         const signed = this.dv.getInt8(this.bytei);
         this.bytei += 1;
@@ -527,7 +519,19 @@ export class InstructionParser {
         throw new Error('Impossible opcode value');
     }
 
+    default64OperandSize: { [key in InstructionType]?: boolean } = {
+        [InstructionType.PUSH]: true,
+        [InstructionType.POP]: true,
+        [InstructionType.RET]: true,
+        [InstructionType.CALL]: true,
+    }
+
+    default64MemoryOffset: { [key in InstructionType]?: boolean } = {
+        [InstructionType.MOV]: true,
+    }
+
     getRegisterInOpCode1632or64(mask: number): Register {
+        let defaultTo64 = !!this.default64OperandSize[this.instruction.type];
         const regValue = this.instruction.opCode ^ mask;
         if (this.instruction.operandSizeOverride) {
             if (this.instruction.rex && this.instruction.rex.b) {
@@ -571,7 +575,7 @@ export class InstructionParser {
             }
         }
         if (this.instruction.rex) {
-            if (this.instruction.rex.w) {
+            if (this.instruction.rex.w || defaultTo64) {
                 if (this.instruction.rex.b) {
                     switch (regValue) {
                         case 0:
@@ -632,6 +636,25 @@ export class InstructionParser {
                             return Register.R15D;
                     }
                 }
+            }
+        } else if (defaultTo64) {
+            switch (regValue) {
+                case 0:
+                    return Register.RAX;
+                case 1:
+                    return Register.RCX;
+                case 2:
+                    return Register.RDX;
+                case 3:
+                    return Register.RBX;
+                case 4:
+                    return Register.RSP;
+                case 5:
+                    return Register.RBP;
+                case 6:
+                    return Register.RSI;
+                case 7:
+                    return Register.RDI;
             }
         } else {
             switch (regValue) {

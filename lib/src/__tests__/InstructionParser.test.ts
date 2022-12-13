@@ -7,7 +7,6 @@ function parseAndAssert(bytes: number[] | string, operands: Operand[], type: Ins
         bytes = strToByteArray(bytes);
     }
 
-    // mov    eax,0x1
     const uint8Array = Uint8Array.from(bytes)
     const dataView = new DataView(uint8Array.buffer);
 
@@ -516,8 +515,26 @@ test('parse MOV', () => {
             register: Register.R15
         },
     ]);
+
+    // mov r8b, [rdi + r9]
+    parseAndAssertMOV("46 8a 04 0f", [
+        {
+            register: Register.R8B
+        },
+        {
+            effectiveAddr: {
+                base: Register.RDI,
+                index: Register.R9,
+                scaleFactor: 1,
+                displacement: 0,
+                dataSize: OperationSize.byte,
+            }
+        },
+    ]);
+
 });
 
+/*
 test('parse XOR', () => {
     // xor rdi, 5000
     // XOR reg/mem64, imm32
@@ -933,3 +950,20 @@ test('CALL', () => {
 test('RET', () => {
     parseAndAssert("c3", [], InstructionType.RET);
 });
+*/
+
+/*
+test('PUSH', () => {
+    parseAndAssert("50", [{register: Register.RAX}], InstructionType.PUSH);
+    parseAndAssert("54", [{register: Register.RSP}], InstructionType.PUSH);
+    parseAndAssert("55", [{register: Register.RBP}], InstructionType.PUSH);
+    parseAndAssert("41 50", [{register: Register.R8}], InstructionType.PUSH);
+    parseAndAssert("41 55", [{register: Register.R13}], InstructionType.PUSH);
+    parseAndAssert("41 57", [{register: Register.R15}], InstructionType.PUSH);
+
+    parseAndAssert("66 50", [{register: Register.AX}], InstructionType.PUSH);
+    parseAndAssert("66 55", [{register: Register.BP}], InstructionType.PUSH);
+    parseAndAssert("66 41 50", [{register: Register.R8W}], InstructionType.PUSH);
+    parseAndAssert("66 41 57", [{register: Register.R15W}], InstructionType.PUSH);
+});
+*/
