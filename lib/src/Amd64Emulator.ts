@@ -21,11 +21,17 @@ export class Amd64Emulator extends Emulator {
         this.process = undefined;
     }
 
-    runElf64ExecutableFromBinary(bytes: ArrayBuffer) {
+    loadElf64ExecutableFromBinary(bytes: ArrayBuffer): Process {
         const elf: ELF64 = this.elfParser.parseExecutableFromBytes(bytes);
         const process = new Process(elf, this);
         this.process = process;
+        return process;
+    }
+
+    runElf64ExecutableFromBinary(bytes: ArrayBuffer): Process {
+        const process = this.loadElf64ExecutableFromBinary(bytes);
         process.run();
+        return process;
     }
 }
 

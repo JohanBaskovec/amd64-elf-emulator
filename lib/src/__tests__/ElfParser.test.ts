@@ -9,4 +9,7 @@ test("parsing", () => {
    expect(elf.sectionHeaders[1].name).toBe(".text");
    expect(elf.sectionHeaders[2].name).toBe(".data");
    expect(elf.sectionHeaders[12].name).toBe(".shstrtab");
+
+   expect(elf.symbolTables).toHaveLength(18);
+
 });

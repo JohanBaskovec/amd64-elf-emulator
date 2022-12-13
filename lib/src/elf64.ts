@@ -18,6 +18,27 @@ export enum Version {
     none, current,
 }
 
+export enum SymbolTableBinding {
+    local, global, weak
+}
+
+export enum SymbolTableType {
+    notype, object, func, section, file, common, tls
+}
+
+export enum SectionHeaderType {
+    null, progbits, symtab, strtab, rela, hash, dynamic,
+    note, nobits, rel, shlib, dynsym, num,
+    loproc = 0x70000000, hiproc = 0x7fffffff, louser = 0x80000000, hiuser = 0xffffffff,
+}
+
+export type Label = {
+    virtualAddress: number;
+    name: string;
+}
+
+export type LabelsMap = { [address: number]: Label }
+
 export interface ELF64Header {
     class: Architecture;
     data: DataEncoding;
@@ -53,7 +74,7 @@ export interface ProgramHeader {
 export interface SectionHeader {
     nameIndex: number;
     name: string;
-    type: number;
+    type: SectionHeaderType;
     flags: bigint;
     addr: bigint;
     offset: bigint;
@@ -69,6 +90,31 @@ export interface ELF64 {
     programHeaders: ProgramHeader[];
     sectionHeaders: SectionHeader[];
     bytes: ArrayBuffer;
+    symbolTables: SymbolTable[] | null;
+    labels: LabelsMap;
+    strings: StringByIndex;
+    sectionHeadersStrings: StringByIndex;
+}
+
+export type StringByIndex = { [index: number]: string };
+export interface SymbolTable {
+    nameIndex: number;
+    name: string;
+    info: number;
+    type: SymbolTableType;
+    binding: SymbolTableBinding;
+    other: number;
+    shndx: number;
+    value: bigint;
+    size: bigint;
+}
+
+export function extractSymbolTableType(info: number): SymbolTableType {
+    return info & 0xf;
+}
+
+export function extractSymbolTableBinding(info: number): SymbolTableBinding {
+    return info >> 4;
 }
 
 

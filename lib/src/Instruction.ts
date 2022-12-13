@@ -104,21 +104,27 @@ export type Instruction = {
     raw?: InstructionRaw;
 }
 
+export function arrayBufferToString(buffer: ArrayBuffer) {
+    const bytes = new DataView(buffer);
+    let bytesStr = "";
+    for (let i = 0; i < bytes.byteLength; i++) {
+        const byte = bytes.getUint8(i);
+        let hex = byte.toString(16);
+        if (hex.length === 1) {
+            hex = '0' + hex;
+        }
+        bytesStr += hex;
+        if (i !== bytes.byteLength - 1) {
+            bytesStr += ' ';
+        }
+    }
+    return bytesStr;
+}
+
 export function instructionFormat(instruction: Instruction): object {
     let bytesStr = "";
     if (instruction.raw !== undefined) {
-        const bytes = new DataView(instruction.raw.bytes);
-        for (let i = 0; i < bytes.byteLength; i++) {
-            const byte = bytes.getUint8(i);
-            let hex = byte.toString(16);
-            if (hex.length === 1) {
-                hex = '0' + hex;
-            }
-            bytesStr += hex;
-            if (i !== bytes.byteLength - 1) {
-                bytesStr += ' ';
-            }
-        }
+        bytesStr = arrayBufferToString(instruction.raw.bytes);
     }
     const ret: any = {
         type: InstructionType[instruction.type],

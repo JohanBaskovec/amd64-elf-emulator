@@ -1,5 +1,14 @@
 import {BinaryFileReader} from "./BinaryFileReader";
-import {ELF64, ELF64Header, ProgramHeader, SectionHeader, Type} from "./elf64";
+import {
+    ELF64,
+    ELF64Header,
+    extractSymbolTableBinding,
+    extractSymbolTableType, LabelsMap,
+    ProgramHeader,
+    SectionHeader, SectionHeaderType, StringByIndex,
+    SymbolTable,
+    Type
+} from "./elf64";
 
 export class ElfParser {
     parseExecutableFromBytes(bytes: ArrayBuffer): ELF64 {
@@ -45,8 +54,24 @@ export class ElfParser {
             throw new Error('File provided is not executable!');
         }
         const header: ELF64Header = {
-            class: clazz, data, elfVersion, osAbi, abiVersion,
-            type, machine, version, entry, programHeadersOffset: phoff, sectionHeadersOffset: shoff, flags, elfHeaderSize: ehsize, programHeadersSize: phentsize, programHeadersNumber: phnum, sectionHeadersSize: shentsize, sectionHeadersNumber: shnum, shstrndx
+            class: clazz,
+            data,
+            elfVersion,
+            osAbi,
+            abiVersion,
+            type,
+            machine,
+            version,
+            entry,
+            programHeadersOffset: phoff,
+            sectionHeadersOffset: shoff,
+            flags,
+            elfHeaderSize: ehsize,
+            programHeadersSize: phentsize,
+            programHeadersNumber: phnum,
+            sectionHeadersSize: shentsize,
+            sectionHeadersNumber: shnum,
+            shstrndx
         };
         //console.log(header);
         dv.index = phoff;
@@ -65,8 +90,10 @@ export class ElfParser {
         }
         dv.index = shoff;
         const sectionHeaders: SectionHeader[] = [];
+        let symbolTablesOffset: bigint = 0n;
+        let symbolTablesNumber: bigint = 0n;
         for (let i = 0; i < shnum; i++) {
-            sectionHeaders.push({
+            const sectionHeader = {
                 nameIndex: dv.getUint32(),
                 name: "no_name",
                 type: dv.getUint32(),
@@ -78,12 +105,16 @@ export class ElfParser {
                 info: dv.getUint32(),
                 addressAlignment: dv.getBigUint64(),
                 entsize: dv.getBigUint64(),
-            });
+            };
+            sectionHeaders.push(sectionHeader);
         }
         const sectionNamesSectionHeader = sectionHeaders[shstrndx];
         const sectionOff = sectionNamesSectionHeader.offset;
+        let stringTableOffset = 0;
+        let stringTableSize = 0;
         for (let i = 0; i < shnum; i++) {
-            dv.index = Number(sectionOff) + sectionHeaders[i].nameIndex;
+            const sh = sectionHeaders[i];
+            dv.index = Number(sectionOff) + sh.nameIndex;
             let name = "";
             let characters: number[] = [];
             let c = dv.getUint8();
@@ -91,15 +122,73 @@ export class ElfParser {
                 characters.push(c);
                 c = dv.getUint8();
             }
-            sectionHeaders[i].name = String.fromCharCode(...characters);
+            name = String.fromCharCode(...characters)
+            sh.name = name;
+            if (name === ".symtab") {
+                symbolTablesOffset = sh.offset;
+                symbolTablesNumber = sh.size / sh.entsize;
+            } else if (sh.type === SectionHeaderType.strtab && shstrndx !== i) {
+                stringTableOffset = Number(sh.offset);
+                stringTableSize = Number(sh.size);
+            }
+        }
+        const strings: StringByIndex = {};
+        if (stringTableOffset !== 0) {
+            dv.index = stringTableOffset;
+            while (dv.index < stringTableOffset + stringTableSize) {
+                let characters: number[] = [];
+                let start = dv.index;
+                let c = dv.getUint8();
+                while (c != 0) {
+                    characters.push(c);
+                    c = dv.getUint8();
+                }
+                let name = String.fromCharCode(...characters)
+                strings[start - stringTableOffset] = name;
+            }
 
         }
+        const addrOffset = programHeaders[0].virtualAddress;
+        const sectionHeadersStrings: StringByIndex = {};
+        let labels: LabelsMap = {};
+        let symbolTables: SymbolTable[] = [];
+        if (symbolTablesNumber !== 0n) {
+            dv.index = Number(symbolTablesOffset);
+            for (let i = 0; i < Number(symbolTablesNumber); i++) {
+                const nameIndex = dv.getUint32();
+                const info = dv.getUint8();
+                const type = extractSymbolTableType(info);
+                const binding = extractSymbolTableBinding(info);
+                const other = dv.getUint8();
+                const shndx = dv.getInt16();
+                const value = dv.getBigUint64();
+                if (type === 0 && binding === 0) {
+                    labels[Number(value) - addrOffset] = {virtualAddress: Number(value), name: strings[nameIndex]};
+                }
+                symbolTables.push({
+                    nameIndex,
+                    name: ".symtab",
+                    info: info,
+                    type,
+                    binding,
+                    other,
+                    shndx,
+                    value,
+                    size: dv.getBigUint64(),
+                });
+            }
+        }
 
+        labels[entry - addrOffset] = {virtualAddress: entry, name: "_start"};
         const elf64: ELF64 = {
             header,
             programHeaders,
             bytes,
             sectionHeaders,
+            symbolTables,
+            labels,
+            strings,
+            sectionHeadersStrings,
         };
         return elf64;
     }
