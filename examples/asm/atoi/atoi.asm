@@ -1,6 +1,8 @@
 section .text
 global _start
 
+global atoi
+
 atoi:
     ; rdi: u8* string
     ; esi: u64 string_length

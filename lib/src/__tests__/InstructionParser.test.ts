@@ -534,7 +534,6 @@ test('parse MOV', () => {
 
 });
 
-/*
 test('parse XOR', () => {
     // xor rdi, 5000
     // XOR reg/mem64, imm32
@@ -912,7 +911,21 @@ test('parse IMUL', () => {
 });
 
 test('parse JGE', () => {
-    parseAndAssert("7d df", [{relativeOffset: immediateFromJsBigIntAndWidth({value: 223n, width: OperationSize.byte})}], InstructionType.JGE);
+    parseAndAssert("7d df", [{
+        relativeOffset: immediateFromJsBigIntAndWidth({
+            value: 223n,
+            width: OperationSize.byte
+        })
+    }], InstructionType.JGE);
+});
+
+test('JE', () => {
+    parseAndAssert("74 05", [{
+        relativeOffset: immediateFromJsBigIntAndWidth({
+            value: 5n,
+            width: OperationSize.byte
+        })
+    }], InstructionType.JE);
 });
 
 test('MOVZX', () => {
@@ -950,9 +963,7 @@ test('CALL', () => {
 test('RET', () => {
     parseAndAssert("c3", [], InstructionType.RET);
 });
-*/
 
-/*
 test('PUSH', () => {
     parseAndAssert("50", [{register: Register.RAX}], InstructionType.PUSH);
     parseAndAssert("54", [{register: Register.RSP}], InstructionType.PUSH);
@@ -966,4 +977,89 @@ test('PUSH', () => {
     parseAndAssert("66 41 50", [{register: Register.R8W}], InstructionType.PUSH);
     parseAndAssert("66 41 57", [{register: Register.R15W}], InstructionType.PUSH);
 });
-*/
+
+test("INC", () => {
+    // inc rax
+    // INC reg/mem64
+    parseAndAssert("48 ff c0", [{register: Register.RAX}], InstructionType.INC);
+    // inc eax
+    // INC reg/mem32
+    parseAndAssert("ff c0", [{register: Register.EAX}], InstructionType.INC);
+    // inc ax
+    // INC reg/mem16
+    parseAndAssert("66 ff c0", [{register: Register.AX}], InstructionType.INC);
+    // inc al
+    // INC reg/mem8
+    parseAndAssert("fe c0", [{register: Register.AL}], InstructionType.INC);
+
+    // inc rdx
+    // INC reg/mem64
+    parseAndAssert("48 ff c2", [{register: Register.RDX}], InstructionType.INC);
+    // inc r9
+    // INC reg/mem64
+    parseAndAssert("49 ff c1", [{register: Register.R9}], InstructionType.INC);
+});
+
+test("DEC", () => {
+    // dec r13b
+    // DEC reg/mem8
+    parseAndAssert("41 fe cd", [{register: Register.R13B}], InstructionType.DEC);
+
+    // dec r13w
+    // DEC reg/mem16
+    parseAndAssert("66 41 ff cd", [{register: Register.R13W}], InstructionType.DEC);
+
+    // dec r13d
+    // DEC reg/mem32
+    parseAndAssert("41 ff cd", [{register: Register.R13D}], InstructionType.DEC);
+
+    // dec r13
+    // DEC reg/mem64
+    parseAndAssert("49 ff cd", [{register: Register.R13}], InstructionType.DEC);
+});
+
+test("JMP", () => {
+    // jmp rax
+    // JMP reg/mem64
+    parseAndAssert("ff e0", [{register: Register.RAX}], InstructionType.JMP);
+
+    // jmp [label]
+    // JMP reg/mem64
+    parseAndAssert("ff 24 25 00 20 40 00", [{
+            effectiveAddr: {
+                base: null,
+                dataSize: 3,
+                displacement: 4202496,
+                index: null,
+                scaleFactor: 1,
+            },
+        }],
+        InstructionType.JMP);
+
+    // jmp label
+    // JMP rel8off
+    parseAndAssert("eb 00", [{
+        relativeOffset: immediateFromJsBigIntAndWidth({value: 0n, width: OperationSize.byte})
+    }], InstructionType.JMP);
+
+    // jmp label
+    // JMP rel8off
+    parseAndAssert("eb 0d", [{
+        relativeOffset: immediateFromJsBigIntAndWidth({value: 13n, width: OperationSize.byte})
+    }], InstructionType.JMP);
+});
+
+test("LEA", () => {
+    // lea rcx, [rsp + 8]
+    // LEA reg64, mem
+    parseAndAssert("48 8d 4c 24 08", [{register: Register.RCX},
+        {
+            effectiveAddr: {
+                base: Register.RSP,
+                index: null,
+                scaleFactor: 1,
+                displacement: 8,
+                dataSize: OperationSize.qword,
+            }
+        }], InstructionType.LEA);
+})

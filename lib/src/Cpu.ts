@@ -13,8 +13,15 @@ import {
     registerWidthMap,
     SubRegisterWidth
 } from "./amd64-architecture";
-import {EffectiveAddress, Instruction, InstructionType, Operand} from "./Instruction";
-import {Emulator} from "./Emulator";
+import {EffectiveAddress, Instruction, InstructionByAddress, InstructionType, Operand} from "./Instruction";
+import {
+    doNothingProcessEventListener,
+    ProcessEventListener,
+    ProcessExitEvent,
+    ProcessWriteEvent
+} from "./ProcessEventListener";
+import {InstructionParser} from "./InstructionParser";
+import {InstructionsParser} from "./InstructionsParser";
 
 type ValueWithWidth = {
     value: bigint;
@@ -23,6 +30,23 @@ type ValueWithWidth = {
 
 const stackMaxSize = 2000000;
 
+
+export function uint8ArrayCopyStringAtAddr(arr: Uint8Array, addr: number, str: string) {
+    const bytes: Uint8Array = new TextEncoder().encode(str);
+    arr.set(arr, addr);
+}
+
+// Write an array of strings into a Uint8Array, each string separated by 0 (like C strings)
+export function uint8ArrayCopyStringsAtAddr(arr: Uint8Array, addr: number, strs: string[]) {
+    let index = 0;
+    for (let i = 0; i < strs.length; i++) {
+        const bytes: Uint8Array = new TextEncoder().encode(strs[i]);
+        arr.set(bytes, addr + index);
+        index += bytes.length;
+        arr[addr + index] = 0;
+        index++;
+    }
+}
 
 export class Cpu {
     private registers: { [key in Register64]: DataView } = {
@@ -44,25 +68,90 @@ export class Cpu {
         [Register64.R15]: new DataView(new ArrayBuffer(8)),
     }
 
-    // 2mo stack
-    stack = new DataView(new ArrayBuffer(stackMaxSize));
-
     private rip: number = 0;
+    private eventListener: ProcessEventListener = doNothingProcessEventListener;
 
     // RFLAGS
     addrOffset: number = 0;
-    private emulator: Emulator;
     private zeroFlag: boolean = false;
     private overflowFlag: boolean = false;
     private carryFlag: boolean = false;
     private parityFlag: boolean = false;
     private signFlag: boolean = false;
 
-    constructor(rip: number, addrOffset: number, emulator: Emulator) {
-        this.rip = rip;
-        this.addrOffset = addrOffset;
-        this.emulator = emulator;
-        this.setRegisterValue(Register.RSP, BigInt(stackMaxSize - 16), true);
+    instructions: InstructionByAddress = {};
+    private dataView: DataView;
+    private machineCode: ArrayBuffer | null = null;
+
+    constructor() {
+        this.dataView = new DataView(new ArrayBuffer(stackMaxSize));
+        this.setRegisterValue(Register.RSP, BigInt(stackMaxSize), true);
+    }
+
+    convertVirtualAddressToPhysicalAddress(virtualAddress: number): number {
+        return virtualAddress - this.addrOffset;
+    }
+
+    convertPhysicalAddressToVirtualAddress(physicalAddress: number): number {
+        return physicalAddress + this.addrOffset;
+    }
+
+    loadMachineCode(machineCode: ArrayBuffer, codeStart: number, codeLength: number, entry: number, addroffset: number): void {
+        this.machineCode = machineCode;
+        this.addrOffset = addroffset;
+        this.rip = entry;
+        this.instructions = this.parseInstructions(new DataView(machineCode), codeStart, codeLength);
+    }
+
+    setupStack(args: string[], listener: ProcessEventListener = doNothingProcessEventListener) {
+        if (this.machineCode === null) {
+            throw new Error('load machine codee first');
+        }
+        this.eventListener = listener;
+        // Setup the memory
+        // ---------TOP----------
+        // Stack:
+        // Process' arguments (array of C strings)
+        // ...
+        // ...
+        // Argument count (uint64) <-- RSP at process start
+        // 2MBM Empty stack
+        // ...
+        // ...
+        // -----------------------<-- stack limit (overflow if push here)
+        // Machine code
+        // ...
+        // ...
+        // -------BOTTOM (0)------
+
+        // 8 bytes for argc + 8 bytes for each pointer to each argument string
+        // + bytes for the argument strings, each followed by a 0.
+        let argsSizeBytes = 8 + 8 * args.length;
+        for (let str of args) {
+            argsSizeBytes += str.length + 1;
+        }
+
+        const tmp = new Uint8Array(this.machineCode.byteLength + stackMaxSize + argsSizeBytes);
+        tmp.set(new Uint8Array(this.machineCode), 0);
+
+        const dataView = new DataView(tmp.buffer);
+        // [rsp] contains argc
+        dataView.setBigUint64(this.machineCode.byteLength + stackMaxSize, BigInt(args.length), true);
+        // if there are 3 arguments:
+        // [rsp + 8] contains address of 1st arg
+        // [rsp + 8 * 2] contains address of 2nd arg
+        // [rsp + 8 * 3] contains address of 3rd arg
+        // [rsp + 8 * 4] contains the first byte of the first arg
+        let addrOffsetArg = 0;
+        for (let i = 0; i < args.length; i++) {
+            const ptr = this.machineCode.byteLength + stackMaxSize + 8 + 8 * args.length + addrOffsetArg + this.addrOffset;
+            const offset = this.machineCode.byteLength + stackMaxSize + 8 + 8 * i;
+            dataView.setBigUint64(offset, BigInt(ptr), true);
+            addrOffsetArg += args[i].length + 1;
+        }
+        uint8ArrayCopyStringsAtAddr(tmp, this.machineCode.byteLength + stackMaxSize + 8 + (8 * args.length), args);
+        this.dataView = new DataView(tmp.buffer);
+        this.setRegisterValue(Register.RSP, BigInt(this.convertPhysicalAddressToVirtualAddress(this.machineCode.byteLength + stackMaxSize)), true);
     }
 
     printRegister(register: Register): void {
@@ -245,48 +334,48 @@ Data in the DataView (big endian!):
         }
     }
 
-    readSignedDataAtAddr(dataView: DataView, addr: number, width: OperationSize): bigint {
+    readSignedDataAtAddr(addr: number, width: OperationSize): bigint {
         addr = addr - this.addrOffset;
-        return this.readFromDataView(dataView, addr, width, true);
+        return this.readFromDataView(this.dataView, addr, width, true);
     }
 
-    readUnsignedDataAtAddr(dataView: DataView, addr: number, width: OperationSize): bigint {
-        addr = addr - this.addrOffset;
-        return this.readFromDataView(dataView, addr, width, false);
+    readUnsignedDataAtAddr(virtualAddr: number, width: OperationSize): bigint {
+        const physicalAddr = this.convertVirtualAddressToPhysicalAddress(virtualAddr);
+        return this.readFromDataView(this.dataView, physicalAddr, width, false);
     }
 
-    private writeDataAtAddress(dataView: DataView, addr: number, value: bigint, operationSize: OperationSize, signed: boolean): void {
+    writeDataAtAddress(addr: number, value: bigint, operationSize: OperationSize, signed: boolean): void {
         if (signed) {
             switch (operationSize) {
                 case OperationSize.byte:
-                    return dataView.setInt8(addr, Number(value));
+                    return this.dataView.setInt8(addr, Number(value));
                 case OperationSize.word:
-                    return dataView.setInt16(addr, Number(value), true);
+                    return this.dataView.setInt16(addr, Number(value), true);
                 case OperationSize.dword:
-                    return dataView.setInt32(addr, Number(value), true);
+                    return this.dataView.setInt32(addr, Number(value), true);
                 case OperationSize.qword:
-                    return dataView.setBigInt64(addr, value, true);
+                    return this.dataView.setBigInt64(addr, value, true);
             }
         } else {
             switch (operationSize) {
                 case OperationSize.byte:
-                    return dataView.setUint8(addr, Number(value));
+                    return this.dataView.setUint8(addr, Number(value));
                 case OperationSize.word:
-                    return dataView.setUint16(addr, Number(value), true);
+                    return this.dataView.setUint16(addr, Number(value), true);
                 case OperationSize.dword:
-                    return dataView.setUint32(addr, Number(value), true);
+                    return this.dataView.setUint32(addr, Number(value), true);
                 case OperationSize.qword:
-                    return dataView.setBigUint64(addr, value, true);
+                    return this.dataView.setBigUint64(addr, value, true);
             }
         }
     }
 
-    readUnsignedValueFromOperand(dataView: DataView, operand: Operand): bigint {
-        return this.readValueFromOperand(dataView, operand, false);
+    readUnsignedValueFromOperand(operand: Operand): bigint {
+        return this.readValueFromOperand(operand, false);
     }
 
-    readSignedValueFromOperand(dataView: DataView, operand: Operand): bigint {
-        return this.readValueFromOperand(dataView, operand, true);
+    readSignedValueFromOperand(operand: Operand): bigint {
+        return this.readValueFromOperand(operand, true);
     }
 
     getOperandWidth(operand: Operand): OperationSize {
@@ -301,13 +390,13 @@ Data in the DataView (big endian!):
         }
     }
 
-    readValueFromOperandWithWidth(dataView: DataView, operand: Operand, signed: boolean): ValueWithWidth {
-        const value = this.readValueFromOperand(dataView, operand, signed);
+    readValueFromOperandWithWidth(operand: Operand, signed: boolean): ValueWithWidth {
+        const value = this.readValueFromOperand(operand, signed);
         let width = this.getOperandWidth(operand);
         return {value, valueWidth: width};
     }
 
-    readValueFromOperand(dataView: DataView, operand: Operand, signed: boolean): bigint {
+    readValueFromOperand(operand: Operand, signed: boolean): bigint {
         if (operand.register !== undefined) {
             return this.readValueRegister(operand.register, signed);
         } else if (operand.immediate !== undefined) {
@@ -325,34 +414,51 @@ Data in the DataView (big endian!):
         } else if (operand.effectiveAddr !== undefined) {
             const ea: EffectiveAddress = operand.effectiveAddr;
             const addr = this.calculateAddress(ea) - this.addrOffset;
-            return this.readFromDataView(dataView, addr, operand.effectiveAddr.dataSize, signed);
+            try {
+                return this.readFromDataView(this.dataView, addr, operand.effectiveAddr.dataSize, signed);
+            } catch (e) {
+                console.log(e);
+                throw e;
+            }
         } else {
             throw new Error('Empty operand');
         }
     }
 
-    writeValueInOperand(dataView: DataView, operand: Operand, value: bigint, signed: boolean): void {
+    writeValueInOperand(operand: Operand, value: bigint, signed: boolean): void {
         if (operand.register !== undefined) {
             this.setRegisterValue(operand.register, value, signed);
         } else if (operand.effectiveAddr !== undefined) {
             const ea = operand.effectiveAddr;
             const addr = this.calculateAddress(ea) - this.addrOffset;
-            this.writeDataAtAddress(dataView, addr, value, ea.dataSize, signed);
+            this.writeDataAtAddress(addr, value, ea.dataSize, signed);
         }
     }
 
-    doAdd(dataView: DataView, instruction: Instruction) {
-        let value0: bigint = this.readSignedValueFromOperand(dataView, instruction.operands[0]);
-        let value1: bigint = this.readSignedValueFromOperand(dataView, instruction.operands[1]);
+    doADD(instruction: Instruction) {
+        let value0: bigint = this.readSignedValueFromOperand(instruction.operands[0]);
+        let value1: bigint = this.readSignedValueFromOperand(instruction.operands[1]);
 
-        this.writeValueInOperand(dataView, instruction.operands[0], value0 + value1, false);
+        this.writeValueInOperand(instruction.operands[0], value0 + value1, false);
     }
 
-    doSUB(dataView: DataView, instruction: Instruction) {
-        let value0: bigint = this.readSignedValueFromOperand(dataView, instruction.operands[0]);
-        let value1: bigint = this.readSignedValueFromOperand(dataView, instruction.operands[1]);
+    doSUB(instruction: Instruction) {
+        let value0: bigint = this.readSignedValueFromOperand(instruction.operands[0]);
+        let value1: bigint = this.readSignedValueFromOperand(instruction.operands[1]);
 
-        this.writeValueInOperand(dataView, instruction.operands[0], value0 - value1, false);
+        this.writeValueInOperand(instruction.operands[0], value0 - value1, false);
+    }
+
+    doINC(instruction: Instruction) {
+        let value: bigint = this.readSignedValueFromOperand(instruction.operands[0]);
+
+        this.writeValueInOperand(instruction.operands[0], value + 1n, false);
+    }
+
+    doDEC(instruction: Instruction) {
+        let value: bigint = this.readSignedValueFromOperand(instruction.operands[0]);
+
+        this.writeValueInOperand(instruction.operands[0], value - 1n, false);
     }
 
     private readValueRegisters(registers: Register[], signed: boolean): bigint {
@@ -422,9 +528,9 @@ Data in the DataView (big endian!):
         }
     }
 
-    private doIDIV(dataView: DataView, instruction: Instruction) {
+    private doIDIV(instruction: Instruction) {
         const operand: Operand = instruction.operands[0];
-        const divisor: bigint = this.readSignedValueFromOperand(dataView, operand);
+        const divisor: bigint = this.readSignedValueFromOperand(operand);
         let width = OperationSize.dword;
         if (operand.register !== undefined) {
             width = registerWidthMap[operand.register];
@@ -452,11 +558,11 @@ Data in the DataView (big endian!):
         this.setRegisterValue(lowBytesRegister, quotient, true);
     }
 
-    private doIMUL(dataView: DataView, instruction: Instruction) {
+    private doIMUL(instruction: Instruction) {
         // TODO: overflow
         if (instruction.operands.length === 1) {
             const operand: Operand = instruction.operands[0];
-            const multiplier: bigint = this.readSignedValueFromOperand(dataView, operand);
+            const multiplier: bigint = this.readSignedValueFromOperand(operand);
             let width = OperationSize.dword;
             if (operand.register !== undefined) {
                 width = registerWidthMap[operand.register];
@@ -481,23 +587,23 @@ Data in the DataView (big endian!):
 
         } else if (instruction.operands.length === 2) {
             const operand0: Operand = instruction.operands[0];
-            const multiplicand: bigint = this.readSignedValueFromOperand(dataView, operand0);
+            const multiplicand: bigint = this.readSignedValueFromOperand(operand0);
             const operand1: Operand = instruction.operands[1];
-            const multiplier: bigint = this.readSignedValueFromOperand(dataView, operand1);
+            const multiplier: bigint = this.readSignedValueFromOperand(operand1);
             const product: bigint = multiplicand * multiplier;
-            this.writeValueInOperand(dataView, operand0, product, true);
+            this.writeValueInOperand(operand0, product, true);
 
         } else {
-            const multiplicand: bigint = this.readSignedValueFromOperand(dataView, instruction.operands[1]);
-            const multiplier: bigint = this.readSignedValueFromOperand(dataView, instruction.operands[2]);
+            const multiplicand: bigint = this.readSignedValueFromOperand(instruction.operands[1]);
+            const multiplier: bigint = this.readSignedValueFromOperand(instruction.operands[2]);
             const product: bigint = multiplicand * multiplier;
-            this.writeValueInOperand(dataView, instruction.operands[0], product, true);
+            this.writeValueInOperand(instruction.operands[0], product, true);
         }
     }
 
     readCurrentStackTop(width: OperationSize, signed: boolean): bigint {
-        const rsp = this.readValueRegister(Register.RSP, false);
-        return this.readFromDataView(this.stack, Number(rsp), width, signed);
+        const rsp = this.readValueRegister(Register.RSP, false) - BigInt(this.addrOffset);
+        return this.readFromDataView(this.dataView, Number(rsp), width, signed);
     }
 
     private pushOnStack(value: bigint, width: OperationSize): void {
@@ -507,33 +613,37 @@ Data in the DataView (big endian!):
         if (newRsp < 0) {
             throw new Error('Stack overflow.');
         }
-        this.writeDataAtAddress(this.stack, Number(newRsp), value, width, true);
+        this.writeDataAtAddress(this.convertVirtualAddressToPhysicalAddress(Number(newRsp)), value, width, true);
         this.setUnsignedRegisterValue(Register.RSP, newRsp);
     }
 
-    private doPUSH(dataView: DataView, instruction: Instruction): void {
-        const {value, valueWidth} = this.readValueFromOperandWithWidth(dataView, instruction.operands[0], false);
+    private doPUSH(instruction: Instruction): void {
+        const {value, valueWidth} = this.readValueFromOperandWithWidth(instruction.operands[0], false);
         this.pushOnStack(value, valueWidth);
     }
 
-    private doPOP(dataView: DataView, instruction: Instruction): void {
+    private doPOP(instruction: Instruction): void {
         const width = this.getOperandWidth(instruction.operands[0]);
         const value = this.readCurrentStackTop(width, true);
-        this.writeValueInOperand(dataView, instruction.operands[0], value, true);
-        const rsp: bigint = this.readUnsignedValueRegister(Register.RSP);
+        this.writeValueInOperand(instruction.operands[0], value, true);
         const widthBytes: number = operationSizeToBytesMap[width];
-        const newRsp = rsp + BigInt(widthBytes);
-        if (newRsp > stackMaxSize) {
+        this.decreaseStackSize(widthBytes);
+    }
+
+    private decreaseStackSize(size: number) {
+        const rsp: bigint = this.readUnsignedValueRegister(Register.RSP);
+        const newRsp = rsp + BigInt(size);
+        const newRspPhysical: number = this.convertVirtualAddressToPhysicalAddress(Number(newRsp));
+        if (newRspPhysical > this.dataView.byteLength) {
             throw new Error('Stack underflow.');
         }
         this.setUnsignedRegisterValue(Register.RSP, newRsp);
-
     }
 
-    private doCMP(dataView: DataView, instruction: Instruction): void {
+    private doCMP(instruction: Instruction): void {
         // it doesn't matter if we interpret as signed or unsigned, the comparison gives the same result
-        const value0 = this.readSignedValueFromOperand(dataView, instruction.operands[0]);
-        const value1 = this.readSignedValueFromOperand(dataView, instruction.operands[1]);
+        const value0 = this.readSignedValueFromOperand(instruction.operands[0]);
+        const value1 = this.readSignedValueFromOperand(instruction.operands[1]);
         const res: bigint = value0 - value1;
         // example:
         // 9 >= 4, res = 5, SF = 0, OF = 0, CF = 0
@@ -551,7 +661,7 @@ Data in the DataView (big endian!):
     }
 
 
-    private doXOR(dataView: DataView, instruction: Instruction): void {
+    private doXOR(instruction: Instruction): void {
         if (instruction.operands[1].register === undefined) {
             throw new Error(`opcode 0x31 (XOR) but operand 2 isn't a register!`);
         }
@@ -570,21 +680,31 @@ Data in the DataView (big endian!):
         }
     }
 
-    private doMOV(dataView: DataView, instruction: Instruction): void {
-        let value: bigint = this.readValueFromOperand(dataView, instruction.operands[1], false);
+    private doMOV(instruction: Instruction): void {
+        let value: bigint = this.readValueFromOperand(instruction.operands[1], false);
 
         if (instruction.operands[0].register !== undefined) {
             this.setRegisterValue(instruction.operands[0].register, value, false);
         } else if (instruction.operands[0].effectiveAddr !== undefined) {
-            const value = this.readValueFromOperand(dataView, instruction.operands[1], true);
+            const value = this.readValueFromOperand(instruction.operands[1], true);
             const ea = instruction.operands[0].effectiveAddr;
             const addr = this.calculateAddress(ea) - this.addrOffset;
-            this.writeDataAtAddress(dataView, addr, value, ea.dataSize, false);
+            this.writeDataAtAddress(addr, value, ea.dataSize, false);
         }
     }
 
-    private doMOVZX(dataView: DataView, instruction: Instruction): void {
-        const {value, valueWidth} = this.readValueFromOperandWithWidth(dataView, instruction.operands[1], true);
+    private doLEA(instruction: Instruction): void {
+        const ea: EffectiveAddress | undefined = instruction.operands[1].effectiveAddr;
+        if (ea === undefined) {
+            throw new Error(`2nd operand of LEA isn't an effective address.`);
+        }
+        const virtualAddress = this.calculateAddress(ea);
+        this.writeValueInOperand(instruction.operands[0], BigInt(virtualAddress), false);
+
+    }
+
+    private doMOVZX(instruction: Instruction): void {
+        const {value, valueWidth} = this.readValueFromOperandWithWidth(instruction.operands[1], true);
         if (instruction.operands[0].register === undefined) {
             throw new Error(`Target of MOVZX isn't a register.`);
         }
@@ -629,32 +749,37 @@ Data in the DataView (big endian!):
         }
     }
 
-    private doJGE(dataView: DataView, instruction: Instruction): void {
+    private doJGE(instruction: Instruction): void {
         if (this.overflowFlag === this.signFlag) {
-            const offset: bigint = this.readSignedValueFromOperand(dataView, instruction.operands[0]);
-            this.rip = this.rip + Number(offset)
+            this.doJMP(instruction);
         }
     }
 
-    private doCALL(dataView: DataView, instruction: Instruction): void {
-        this.pushOnStack(BigInt(this.rip), OperationSize.qword);
-        const offset: bigint = this.readSignedValueFromOperand(dataView, instruction.operands[0]);
+    private doJE(instruction: Instruction): void {
+        if (this.zeroFlag) {
+            this.doJMP(instruction);
+        }
+    }
+
+    private doJMP(instruction: Instruction): void {
+        const offset: bigint = this.readSignedValueFromOperand(instruction.operands[0]);
         this.rip = this.rip + Number(offset)
     }
 
-    private doRET(dataView: DataView, instruction: Instruction): void {
+    private doCALL(instruction: Instruction): void {
+        this.pushOnStack(BigInt(this.rip), OperationSize.qword);
+        const offset: bigint = this.readSignedValueFromOperand(instruction.operands[0]);
+        this.rip = this.rip + Number(offset)
+    }
+
+    private doRET(instruction: Instruction): void {
         // top of the stack MUST be RIP
         const value = this.readCurrentStackTop(OperationSize.qword, true);
         this.rip = Number(value);
-        const rsp: bigint = this.readUnsignedValueRegister(Register.RSP);
-        const newRsp = rsp + BigInt(8);
-        if (newRsp > stackMaxSize) {
-            throw new Error('Stack underflow.');
-        }
-        this.setUnsignedRegisterValue(Register.RSP, newRsp);
+        this.decreaseStackSize(8);
     }
 
-    private doSYSCALL(dataView: DataView, instruction: Instruction): void {
+    private doSYSCALL(instruction: Instruction): void {
         const code = this.readValueRegister(Register.RAX, false);
         //console.log(`System call code ${code}`);
         switch (code) {
@@ -663,15 +788,15 @@ Data in the DataView (big endian!):
                 const strAddr = Number(this.readValueRegister(Register.RSI, false)) - this.addrOffset;
                 const strLength = Number(this.readValueRegister(Register.RDX, false));
                 const td = new TextDecoder("utf-8");
-                const dvs = dataView.buffer.slice(strAddr, strAddr + strLength);
+                const dvs = this.dataView.buffer.slice(strAddr, strAddr + strLength);
                 const str = td.decode(dvs);
                 console.log('Write: ' + str);
-                this.emulator.onWrite(str);
+                this.eventListener(new ProcessWriteEvent(str));
                 break;
             case 60n:
                 const exitCode = Number(this.readValueRegister(Register.RDI, false));
                 console.log(`Process finished with code ${exitCode}`);
-                this.emulator.onExit(exitCode);
+                this.eventListener(new ProcessExitEvent(exitCode));
                 break;
             default:
                 throw new Error(`System call ${code} not implemented.`);
@@ -679,61 +804,17 @@ Data in the DataView (big endian!):
     }
 
 
-    execute(dataView: DataView, instruction: Instruction) {
+    execute(instruction: Instruction) {
         if (instruction.length !== undefined) {
             this.rip += instruction.length;
         }
-        //console.log(instructionFormat(instruction));
-        switch (instruction.type) {
-            case InstructionType.XOR:
-                this.doXOR(dataView, instruction);
-                break;
-
-            case InstructionType.ADD:
-                this.doAdd(dataView, instruction);
-                break;
-            case InstructionType.IDIV:
-                this.doIDIV(dataView, instruction);
-                break;
-            case InstructionType.IMUL:
-                this.doIMUL(dataView, instruction);
-                break;
-            case InstructionType.SUB:
-                this.doSUB(dataView, instruction);
-                break;
-            case InstructionType.PUSH:
-                this.doPUSH(dataView, instruction);
-                break;
-            case InstructionType.POP:
-                this.doPOP(dataView, instruction);
-                break;
-
-            case InstructionType.MOV:
-                this.doMOV(dataView, instruction);
-                break;
-            case InstructionType.MOVZX:
-                this.doMOVZX(dataView, instruction);
-                break;
-            case InstructionType.JGE:
-                this.doJGE(dataView, instruction);
-                break;
-            case InstructionType.CMP:
-                this.doCMP(dataView, instruction);
-                break;
-            case InstructionType.CALL:
-                this.doCALL(dataView, instruction);
-                break;
-
-            case InstructionType.SYSCALL:
-                this.doSYSCALL(dataView, instruction);
-                break;
-            case InstructionType.RET:
-                this.doRET(dataView, instruction);
-                break;
-
-            default:
-                throw new Error('Unsupported instruction type: ' + instruction.type);
+        const func: (instruction: Instruction) => void | undefined = (this as any)["do" + InstructionType[instruction.type]];
+        if (func !== undefined) {
+            func.bind(this)(instruction);
+        } else {
+            throw new Error('Unsupported instruction type: ' + instruction.type);
         }
+
     }
 
     private calculateAddress(ea: EffectiveAddress) {
@@ -754,5 +835,18 @@ Data in the DataView (big endian!):
 
     getRip() {
         return this.rip;
+    }
+
+    parseInstructions(machineCode: DataView, codeStart: number, codeLength: number): InstructionByAddress {
+        const instructionsParser = new InstructionsParser();
+        return instructionsParser.parse(machineCode, codeStart, codeLength, this.addrOffset);
+    }
+
+    executeNextInstruction() {
+        const instruction: Instruction | undefined = this.instructions[this.getRip()];
+        if (instruction === undefined) {
+            throw new Error(`Instruction not found at address ${this.getRip()}, shutting down process.`);
+        }
+        this.execute(instruction);
     }
 }

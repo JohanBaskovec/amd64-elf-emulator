@@ -6,10 +6,14 @@ export enum OperandModRMOrder {
 }
 
 export enum InstructionType {
-    none, ADD, IDIV, IMUL, MOV, MOVZX, CMP, JGE, XOR, SUB,
-    PUSH, POP,
+    none, ADD, IDIV, IMUL, MOV, MOVZX, CMP, XOR, SUB, INC, DEC,
+    JO, JNO, JB, JC, JNAE, JNB, JNC, JAE, JE, JNZ,
+    JNE, JBE, JNA, JNBE, JA, JS, JNS, JP, JPE, JNP, JPO,
+    JL, JNGE, JNL, JGE, JLE, JNG, JNLE, JG,
+    LEA, PUSH, POP,
     SYSCALL,
     CALL, RET,
+    JMP,
 }
 
 export type REXPrefix = {

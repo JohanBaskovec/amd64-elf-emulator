@@ -6,4 +6,4 @@ const executablePath = argv[2];
 console.log('Running ' + executablePath);
 const vm = new Amd64Emulator();
 const executableContent = fs.readFileSync(executablePath);
-vm.runElf64ExecutableFromBinary(executableContent.buffer);
+vm.runElf64ExecutableFromBinary(executablePath, executableContent.buffer, argv.slice(2));

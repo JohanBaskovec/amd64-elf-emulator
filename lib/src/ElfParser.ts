@@ -3,9 +3,12 @@ import {
     ELF64,
     ELF64Header,
     extractSymbolTableBinding,
-    extractSymbolTableType, LabelsMap,
+    extractSymbolTableType,
+    LabelsMap,
     ProgramHeader,
-    SectionHeader, SectionHeaderType, StringByIndex,
+    SectionHeader,
+    SectionHeaderType,
+    StringByIndex,
     SymbolTable,
     Type
 } from "./elf64";
@@ -148,7 +151,6 @@ export class ElfParser {
             }
 
         }
-        const addrOffset = programHeaders[0].virtualAddress;
         const sectionHeadersStrings: StringByIndex = {};
         let labels: LabelsMap = {};
         let symbolTables: SymbolTable[] = [];
@@ -163,7 +165,7 @@ export class ElfParser {
                 const shndx = dv.getInt16();
                 const value = dv.getBigUint64();
                 if (type === 0 && binding === 0) {
-                    labels[Number(value) - addrOffset] = {virtualAddress: Number(value), name: strings[nameIndex]};
+                    labels[Number(value)] = {virtualAddress: Number(value), name: strings[nameIndex]};
                 }
                 symbolTables.push({
                     nameIndex,
@@ -179,7 +181,7 @@ export class ElfParser {
             }
         }
 
-        labels[entry - addrOffset] = {virtualAddress: entry, name: "_start"};
+        labels[entry] = {virtualAddress: entry, name: "_start"};
         const elf64: ELF64 = {
             header,
             programHeaders,

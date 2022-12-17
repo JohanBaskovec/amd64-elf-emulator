@@ -3,9 +3,9 @@ import {ELF64} from "./elf64";
 import {Emulator} from "./Emulator";
 import {initInstructionDefinitions} from "./instructions-definitions";
 import {ElfParser} from "./ElfParser";
+import {doNothingProcessEventListener, ProcessEventListener} from "./ProcessEventListener";
 
 export class Amd64Emulator extends Emulator {
-    process?: Process;
     elfParser = new ElfParser();
 
     constructor() {
@@ -13,24 +13,15 @@ export class Amd64Emulator extends Emulator {
         initInstructionDefinitions();
     }
 
-    onExit(code: number) {
-        super.onExit(code);
-        if (this.process) {
-            this.process.stop();
-        }
-        this.process = undefined;
-    }
-
-    loadElf64ExecutableFromBinary(bytes: ArrayBuffer): Process {
+    loadElf64ExecutableFromBinary(name: string, bytes: ArrayBuffer, args: string[] =  [], eventListener: ProcessEventListener = doNothingProcessEventListener): Process {
         const elf: ELF64 = this.elfParser.parseExecutableFromBytes(bytes);
-        const process = new Process(elf, this);
-        this.process = process;
+        const process = new Process(name, elf);
         return process;
     }
 
-    runElf64ExecutableFromBinary(bytes: ArrayBuffer): Process {
-        const process = this.loadElf64ExecutableFromBinary(bytes);
-        process.run();
+    runElf64ExecutableFromBinary(name: string, bytes: ArrayBuffer, args: string[] =  [], eventListener: ProcessEventListener = doNothingProcessEventListener): Process {
+        const process = this.loadElf64ExecutableFromBinary(name, bytes, args, eventListener);
+        process.run(args, eventListener);
         return process;
     }
 }

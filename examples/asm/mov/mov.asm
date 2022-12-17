@@ -7,7 +7,9 @@ _start:
     ; mov rax, r8w
     ; mov rax, r8d
 
+    je ok
     mov rax, 1
+    ok:
 
     ; moving a value to a 32-bits register clears the top 32-bits of the 64-bits register
     mov rax, -1 ; sets all bits of rax to 1
@@ -85,3 +87,6 @@ _start:
     xor rax, rax            ; exit code 0
     mov rax, 60             ; system call code for exit
     syscall                 ; do the system call
+
+section .data
+ahh dq 432

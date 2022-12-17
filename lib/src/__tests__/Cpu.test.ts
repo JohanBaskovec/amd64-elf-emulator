@@ -1,11 +1,56 @@
-import {Cpu} from "../Cpu";
-import {Emulator} from "../Emulator";
+import {Cpu, uint8ArrayCopyStringsAtAddr} from "../Cpu";
 import {immediateFromJsBigIntAndWidth, InstructionType} from "../Instruction";
 import {OperationSize, Register} from "../amd64-architecture";
+import * as fs from "fs";
+import {ElfParser} from "../ElfParser";
+import {Process} from "../Process";
 
+test("uint8ArrayCopyStringsAtAddr", () => {
+    const arr = new Uint8Array(100);
+    const strs = [
+        "hello",
+        "world",
+    ];
+    uint8ArrayCopyStringsAtAddr(arr, 8, strs);
+    const expectation = `\0\0\0\0\0\0\0\0hello\0world\0`;
+    for (let i = 0; i < expectation.length; i++) {
+        expect(arr[i]).toBe(expectation.charCodeAt(i));
+    }
+});
+
+test("setupStack", () => {
+    const executableContent = fs.readFileSync("src/__tests__/atoi");
+    const elf = new ElfParser().parseExecutableFromBytes(executableContent.buffer);
+    const process = new Process("test", elf);
+    const args = ['program', '43', '999'];
+    const cpu = process.cpu;
+    cpu.setupStack(args);
+
+    expect(Object.keys(cpu.instructions)).toHaveLength(24);
+    expect(cpu.readCurrentStackTop(OperationSize.qword, true)).toBe(3n);
+    for (let argi = 0 ; argi < args.length ; argi++) {
+        const argPtr = cpu.readUnsignedValueFromOperand({
+            effectiveAddr: {
+                base: Register.RSP,
+                dataSize: OperationSize.qword,
+                index: null,
+                scaleFactor: 1,
+                displacement: 8 + 8 * argi
+            }
+        });
+        const argBytes: number[] = [];
+        let i = 0;
+        let c = Number(cpu.readUnsignedDataAtAddr(Number(argPtr) + i, OperationSize.byte));
+        while (c != 0) {
+            argBytes.push(c);
+            i++;
+            c = Number(cpu.readUnsignedDataAtAddr(Number(argPtr) + i, OperationSize.byte));
+        }
+        expect(String.fromCharCode(...argBytes)).toBe(args[argi])
+    }
+});
 test('set and read registers', () => {
-    const dv = new DataView(new ArrayBuffer(0));
-    const cpu = new Cpu(0, 0, new Emulator());
+    const cpu = new Cpu();
     cpu.setRegisterValue(Register.RAX, 1n, true);
     expect(cpu.readSignedValueRegister(Register.RAX)).toBe(1n);
     expect(cpu.readSignedValueRegister(Register.AL)).toBe(1n);
@@ -23,11 +68,10 @@ test('set and read registers', () => {
 
 });
 test('MOV register to register', () => {
-    const dv = new DataView(new ArrayBuffer(0));
-    const cpu = new Cpu(0, 0, new Emulator());
+    const cpu = new Cpu();
 
     // mov qword reg to reg
-    cpu.execute(dv, {
+    cpu.execute({
         type: InstructionType.MOV,
         operands: [{register: Register.RAX}, {
             immediate: immediateFromJsBigIntAndWidth({
@@ -37,7 +81,7 @@ test('MOV register to register', () => {
         }],
     });
     expect(cpu.readUnsignedValueRegister(Register.RAX)).toBe(55n);
-    cpu.execute(dv, {
+    cpu.execute({
         type: InstructionType.MOV,
         operands: [{register: Register.R15}, {
             immediate: immediateFromJsBigIntAndWidth({
@@ -47,7 +91,7 @@ test('MOV register to register', () => {
         }],
     });
     expect(cpu.readUnsignedValueRegister(Register.R15)).toBe(100n);
-    cpu.execute(dv, {
+    cpu.execute({
         type: InstructionType.MOV,
         operands: [{register: Register.RAX}, {register: Register.R15}],
     });
@@ -55,7 +99,7 @@ test('MOV register to register', () => {
     expect(cpu.readUnsignedValueRegister(Register.R15)).toBe(100n);
 
     // mov byte reg to reg
-    cpu.execute(dv, {
+    cpu.execute({
         type: InstructionType.MOV,
         operands: [{register: Register.SPL}, {
             immediate: immediateFromJsBigIntAndWidth({
@@ -66,7 +110,7 @@ test('MOV register to register', () => {
     });
     expect(cpu.readUnsignedValueRegister(Register.SPL)).toBe(25n);
 
-    cpu.execute(dv, {
+    cpu.execute({
         type: InstructionType.MOV,
         operands: [{register: Register.R9B}, {register: Register.SPL}],
     });
@@ -75,11 +119,10 @@ test('MOV register to register', () => {
 });
 
 test('MOV immediate to register', () => {
-    const dv = new DataView(new ArrayBuffer(0));
-    const cpu = new Cpu(0, 0, new Emulator());
+    const cpu = new Cpu();
 
     // mov qword reg to reg
-    cpu.execute(dv, {
+    cpu.execute({
         type: InstructionType.MOV,
         operands: [{register: Register.RAX}, {
             immediate: immediateFromJsBigIntAndWidth({
@@ -89,7 +132,7 @@ test('MOV immediate to register', () => {
         }],
     });
     expect(cpu.readUnsignedValueRegister(Register.RAX)).toBe(55n);
-    cpu.execute(dv, {
+    cpu.execute({
         type: InstructionType.MOV,
         operands: [{register: Register.R15}, {
             immediate: immediateFromJsBigIntAndWidth({
@@ -99,7 +142,7 @@ test('MOV immediate to register', () => {
         }],
     });
     expect(cpu.readUnsignedValueRegister(Register.R15)).toBe(100n);
-    cpu.execute(dv, {
+    cpu.execute({
         type: InstructionType.MOV,
         operands: [{register: Register.RAX}, {register: Register.R15}],
     });
@@ -107,7 +150,7 @@ test('MOV immediate to register', () => {
     expect(cpu.readUnsignedValueRegister(Register.R15)).toBe(100n);
 
     // mov byte reg to reg
-    cpu.execute(dv, {
+    cpu.execute({
         type: InstructionType.MOV,
         operands: [{register: Register.SPL}, {
             immediate: immediateFromJsBigIntAndWidth({
@@ -118,7 +161,7 @@ test('MOV immediate to register', () => {
     });
     expect(cpu.readUnsignedValueRegister(Register.SPL)).toBe(25n);
 
-    cpu.execute(dv, {
+    cpu.execute({
         type: InstructionType.MOV,
         operands: [{register: Register.R9B}, {register: Register.SPL}],
 
@@ -128,11 +171,10 @@ test('MOV immediate to register', () => {
 });
 
 test('MOV memory to register', () => {
-    const dv = new DataView(new ArrayBuffer(32));
-    dv.setBigUint64(4, 54321n, true);
-    const cpu = new Cpu(0, 0, new Emulator());
+    const cpu = new Cpu();
+    cpu.writeDataAtAddress(4, 54321n, OperationSize.qword, true);
 
-    cpu.execute(dv, {
+    cpu.execute({
         type: InstructionType.MOV,
         operands: [{register: Register.RAX}, {
             effectiveAddr: {
@@ -148,8 +190,8 @@ test('MOV memory to register', () => {
 
     // Set all bits of RAX to 1
     const maxUint64: bigint = 0xffffffffffffffffn;
-    dv.setBigUint64(12, maxUint64, true);
-    cpu.execute(dv, {
+    cpu.writeDataAtAddress(12, maxUint64, OperationSize.qword, true);
+    cpu.execute({
         type: InstructionType.MOV,
         operands: [{register: Register.RAX}, {
             effectiveAddr: {
@@ -166,8 +208,8 @@ test('MOV memory to register', () => {
     expect(cpu.readUnsignedValueRegister(Register.RAX)).toBe(BigInt(maxUint64));
 
     // set top 32 bits and bottom 16 bits to 0, and the 16 bits in-between to 1
-    dv.setUint32(20, 0xffff0000, true);
-    cpu.execute(dv, {
+    cpu.writeDataAtAddress(20, 0xffff0000n, OperationSize.dword, true);
+    cpu.execute({
         type: InstructionType.MOV,
         operands: [{register: Register.RAX}, {
             effectiveAddr: {
@@ -184,7 +226,7 @@ test('MOV memory to register', () => {
     expect(cpu.readUnsignedValueRegister(Register.RAX)).toBe(0x00000000ffff0000n);
 
     // Set all bits To 1 again
-    cpu.execute(dv, {
+    cpu.execute({
         type: InstructionType.MOV,
         operands: [{register: Register.RAX}, {
             effectiveAddr: {
@@ -199,9 +241,9 @@ test('MOV memory to register', () => {
     });
 
 
-    dv.setUint16(0, 0x0000, true);
+    cpu.writeDataAtAddress(0, 0x0000n, OperationSize.word, true);
     // Set bottom 16 bits to 0
-    cpu.execute(dv, {
+    cpu.execute({
         type: InstructionType.MOV,
         operands: [{register: Register.AX}, {
             effectiveAddr: {
@@ -220,7 +262,7 @@ test('MOV memory to register', () => {
     cpu.setUnsignedRegisterValue(Register.R13, 3n);
     cpu.setUnsignedRegisterValue(Register.R9, 42567n);
     // mov [rsp + 2 * r13 + 4], r9
-    cpu.execute(dv, {
+    cpu.execute({
         type: InstructionType.MOV,
         operands: [{
             effectiveAddr: {
@@ -233,15 +275,14 @@ test('MOV memory to register', () => {
         }, {register: Register.R9}],
 
     });
-    expect(cpu.readUnsignedDataAtAddr(dv, 12, OperationSize.qword)).toBe(42567n);
+    expect(cpu.readUnsignedDataAtAddr(12, OperationSize.qword)).toBe(42567n);
 });
 
 test('MOV register to memory', () => {
-    const dv = new DataView(new ArrayBuffer(32));
-    const cpu = new Cpu(0, 0, new Emulator());
+    const cpu = new Cpu();
 
     cpu.setUnsignedRegisterValue(Register.RAX, 1000n);
-    cpu.execute(dv, {
+    cpu.execute({
         type: InstructionType.MOV,
         operands: [{
             effectiveAddr: {
@@ -254,24 +295,23 @@ test('MOV register to memory', () => {
         }, {register: Register.RAX}],
 
     });
-    expect(cpu.readUnsignedDataAtAddr(dv, 0, OperationSize.qword)).toBe(1000n);
+    expect(cpu.readUnsignedDataAtAddr(0, OperationSize.qword)).toBe(1000n);
 });
 
 
 test('ADD', () => {
-    const dv = new DataView(new ArrayBuffer(32));
-    const cpu = new Cpu(0, 0, new Emulator());
-    dv.setBigUint64(0, 100n, true);
+    const cpu = new Cpu();
+    cpu.writeDataAtAddress(0, 100n, OperationSize.qword, true);
 
     cpu.setUnsignedRegisterValue(Register.RAX, 1000n);
     cpu.setUnsignedRegisterValue(Register.R9, 44n);
-    cpu.execute(dv, {
+    cpu.execute({
         type: InstructionType.ADD,
         operands: [{register: Register.R9}, {register: Register.RAX}],
 
     });
     expect(cpu.readUnsignedValueRegister(Register.R9)).toBe(1044n);
-    cpu.execute(dv, {
+    cpu.execute({
         type: InstructionType.ADD,
         operands: [{
             effectiveAddr: {
@@ -284,11 +324,11 @@ test('ADD', () => {
         }, {register: Register.R9}],
 
     });
-    expect(cpu.readUnsignedDataAtAddr(dv, 0, OperationSize.qword)).toBe(1144n);
+    expect(cpu.readUnsignedDataAtAddr(0, OperationSize.qword)).toBe(1144n);
 });
 
 test('readSignedValueRegisters', () => {
-    const cpu = new Cpu(0, 0, new Emulator());
+    const cpu = new Cpu();
     cpu.setSignedRegisterValue(Register.RAX, 0xff_ff_ff_ff_ff_ff_ff_ffn);
     cpu.setSignedRegisterValue(Register.RBX, 0xff_ff_ff_ff_ff_ff_ff_ffn);
     {
@@ -320,17 +360,16 @@ test('readSignedValueRegisters', () => {
 });
 
 test('IMUL and IDIV', () => {
-    const dv = new DataView(new ArrayBuffer(32));
-    const cpu = new Cpu(0, 0, new Emulator());
+    const cpu = new Cpu();
     cpu.setSignedRegisterValue(Register.RAX, 9223372036854775111n);
     cpu.setSignedRegisterValue(Register.RBX, 94n);
 
-    cpu.execute(dv, {operands: [{register: Register.RBX}], type: InstructionType.IMUL});
+    cpu.execute({operands: [{register: Register.RBX}], type: InstructionType.IMUL});
     let rdx = cpu.readSignedValueRegister(Register.RDX);
     let rax = cpu.readSignedValueRegister(Register.RAX);
 
     cpu.setSignedRegisterValue(Register.RBX, 8669969714643488604n);
-    cpu.execute(dv, {operands: [{register: Register.RBX}], type: InstructionType.IDIV});
+    cpu.execute({operands: [{register: Register.RBX}], type: InstructionType.IDIV});
     rdx = cpu.readSignedValueRegister(Register.RDX);
     rax = cpu.readSignedValueRegister(Register.RAX);
     expect(rdx).toBe(34n);
@@ -338,9 +377,8 @@ test('IMUL and IDIV', () => {
 });
 
 test('PUSH & POP', () => {
-    const dv = new DataView(new ArrayBuffer(32));
-    const cpu = new Cpu(0, 0, new Emulator());
-    cpu.execute(dv, {
+    const cpu = new Cpu();
+    cpu.execute({
         operands: [{immediate: immediateFromJsBigIntAndWidth({value: 4376n, width: OperationSize.qword})}],
 
         type: InstructionType.PUSH
@@ -348,20 +386,19 @@ test('PUSH & POP', () => {
     expect(cpu.readCurrentStackTop(OperationSize.qword, true)).toBe(4376n);
 
     cpu.setSignedRegisterValue(Register.R8W, -423n);
-    cpu.execute(dv, {operands: [{register: Register.R8W}], type: InstructionType.PUSH});
+    cpu.execute({operands: [{register: Register.R8W}], type: InstructionType.PUSH});
     expect(cpu.readCurrentStackTop(OperationSize.word, true)).toBe(-423n);
 
-    cpu.execute(dv, {operands: [{register: Register.R9W}], type: InstructionType.POP});
+    cpu.execute({operands: [{register: Register.R9W}], type: InstructionType.POP});
     expect(cpu.readSignedValueRegister(Register.R9W)).toBe(-423n);
     expect(cpu.readCurrentStackTop(OperationSize.qword, true)).toBe(4376n);
 })
 
 test('MOVZX', () => {
-    const dv = new DataView(new ArrayBuffer(32));
-    const cpu = new Cpu(0, 0, new Emulator());
+    const cpu = new Cpu();
 
     cpu.setSignedRegisterValue(Register.RAX, 0n);
-    cpu.execute(dv, {
+    cpu.execute({
         operands: [{register: Register.RAX}, {
             immediate: immediateFromJsBigIntAndWidth({
                 value: -1n,
@@ -377,7 +414,7 @@ test('MOVZX', () => {
     expect(cpu.readSignedValueRegister(Register.RAX)).toBe(255n);
 
     cpu.setSignedRegisterValue(Register.RAX, -1n);
-    cpu.execute(dv, {
+    cpu.execute({
         operands: [{register: Register.AX}, {
             immediate: immediateFromJsBigIntAndWidth({
                 value: 34n,
@@ -391,7 +428,7 @@ test('MOVZX', () => {
     expect(cpu.readSignedValueRegister(Register.RAX)).toBe(-65502n);
 
     cpu.setSignedRegisterValue(Register.RAX, -1n);
-    cpu.execute(dv, {
+    cpu.execute({
         operands: [{register: Register.AX}, {
             immediate: immediateFromJsBigIntAndWidth({
                 value: -34n,
@@ -405,7 +442,7 @@ test('MOVZX', () => {
     expect(cpu.readSignedValueRegister(Register.RAX)).toBe(-65314n);
 
     cpu.setSignedRegisterValue(Register.RAX, -1n);
-    cpu.execute(dv, {
+    cpu.execute({
         operands: [{register: Register.EAX}, {
             immediate: immediateFromJsBigIntAndWidth({
                 value: -34n,
@@ -419,7 +456,7 @@ test('MOVZX', () => {
     expect(cpu.readSignedValueRegister(Register.RAX)).toBe(222n);
 
     cpu.setSignedRegisterValue(Register.RAX, -1n);
-    cpu.execute(dv, {
+    cpu.execute({
         operands: [{register: Register.EAX}, {
             immediate: immediateFromJsBigIntAndWidth({
                 value: -284n,
@@ -433,7 +470,7 @@ test('MOVZX', () => {
     expect(cpu.readSignedValueRegister(Register.RAX)).toBe(65252n);
 
     cpu.setSignedRegisterValue(Register.RAX, -1n);
-    cpu.execute(dv, {
+    cpu.execute({
         operands: [{register: Register.RAX}, {
             immediate: immediateFromJsBigIntAndWidth({
                 value: -284n,
@@ -446,7 +483,7 @@ test('MOVZX', () => {
     expect(cpu.readSignedValueRegister(Register.RAX)).toBe(65252n);
 
     cpu.setSignedRegisterValue(Register.RAX, -1n);
-    cpu.execute(dv, {
+    cpu.execute({
         operands: [{register: Register.RAX}, {
             immediate: immediateFromJsBigIntAndWidth({
                 value: -34n,
@@ -460,17 +497,16 @@ test('MOVZX', () => {
 });
 
 test('JGE', () => {
-    const dv = new DataView(new ArrayBuffer(32));
-    const cpu = new Cpu(0, 0, new Emulator());
+    const cpu = new Cpu();
     cpu.setSignedRegisterValue(Register.RAX, 5n);
     cpu.setSignedRegisterValue(Register.RBX, 5n);
-    cpu.execute(dv, {
+    cpu.execute({
         operands: [{register: Register.RAX}, {register: Register.RBX}],
         type: InstructionType.CMP,
         length: 5,
 
     });
-    cpu.execute(dv, {
+    cpu.execute({
         operands: [{relativeOffset: immediateFromJsBigIntAndWidth({value: -10n, width: OperationSize.byte})}],
         type: InstructionType.JGE,
         length: 5,
@@ -478,12 +514,12 @@ test('JGE', () => {
     expect(cpu.getRip()).toBe(0);
 
     cpu.setSignedRegisterValue(Register.RBX, 4n);
-    cpu.execute(dv, {
+    cpu.execute({
         operands: [{register: Register.RAX}, {register: Register.RBX}],
         type: InstructionType.CMP,
         length: 5,
     });
-    cpu.execute(dv, {
+    cpu.execute({
         operands: [{relativeOffset: immediateFromJsBigIntAndWidth({value: -8n, width: OperationSize.byte})}],
         length: 5,
         type: InstructionType.JGE
@@ -491,15 +527,82 @@ test('JGE', () => {
     expect(cpu.getRip()).toBe(2);
 
     cpu.setSignedRegisterValue(Register.RBX, 8n);
-    cpu.execute(dv, {
+    cpu.execute({
         operands: [{register: Register.RAX}, {register: Register.RBX}],
         type: InstructionType.CMP,
         length: 5,
     });
-    cpu.execute(dv, {
+    cpu.execute({
         operands: [{relativeOffset: immediateFromJsBigIntAndWidth({value: -8n, width: OperationSize.byte})}],
         length: 5,
         type: InstructionType.JGE
     });
     expect(cpu.getRip()).toBe(12);
 })
+
+test("INC & DEC", () => {
+    const cpu = new Cpu();
+    cpu.execute({type: InstructionType.INC, operands: [{register: Register.RAX}]});
+    expect(cpu.readSignedValueRegister(Register.RAX)).toBe(1n);
+    cpu.execute({type: InstructionType.INC, operands: [{register: Register.RAX}]});
+    expect(cpu.readSignedValueRegister(Register.RAX)).toBe(2n);
+    cpu.execute({type: InstructionType.INC, operands: [{register: Register.RAX}]});
+    expect(cpu.readSignedValueRegister(Register.RAX)).toBe(3n);
+    cpu.execute({type: InstructionType.DEC, operands: [{register: Register.RAX}]});
+    expect(cpu.readSignedValueRegister(Register.RAX)).toBe(2n);
+    cpu.execute({type: InstructionType.DEC, operands: [{register: Register.RAX}]});
+    expect(cpu.readSignedValueRegister(Register.RAX)).toBe(1n);
+    cpu.execute({type: InstructionType.DEC, operands: [{register: Register.RAX}]});
+    expect(cpu.readSignedValueRegister(Register.RAX)).toBe(0n);
+    cpu.execute({type: InstructionType.DEC, operands: [{register: Register.RAX}]});
+    expect(cpu.readSignedValueRegister(Register.RAX)).toBe(-1n);
+    cpu.execute({type: InstructionType.DEC, operands: [{register: Register.RAX}]});
+    expect(cpu.readSignedValueRegister(Register.RAX)).toBe(-2n);
+    cpu.execute({type: InstructionType.INC, operands: [{register: Register.RAX}]});
+    expect(cpu.readSignedValueRegister(Register.RAX)).toBe(-1n);
+    cpu.execute({type: InstructionType.INC, operands: [{register: Register.RAX}]});
+    expect(cpu.readSignedValueRegister(Register.RAX)).toBe(0n);
+    cpu.execute({type: InstructionType.INC, operands: [{register: Register.RAX}]});
+    expect(cpu.readSignedValueRegister(Register.RAX)).toBe(1n);
+});
+
+test('JMP', () => {
+    const cpu = new Cpu();
+    cpu.execute({
+        operands: [{relativeOffset: immediateFromJsBigIntAndWidth({value: 10n, width: OperationSize.byte})}],
+        type: InstructionType.JMP,
+    });
+    expect(cpu.getRip()).toBe(10);
+
+    cpu.execute({
+        operands: [{relativeOffset: immediateFromJsBigIntAndWidth({value: -8n, width: OperationSize.byte})}],
+        type: InstructionType.JMP
+    });
+    expect(cpu.getRip()).toBe(2);
+
+    cpu.setSignedRegisterValue(Register.RAX, 5n);
+    cpu.execute({
+        operands: [{register: Register.RAX}],
+        type: InstructionType.JGE
+    });
+    expect(cpu.getRip()).toBe(7);
+})
+
+test("LEA", () => {
+    const cpu = new Cpu();
+    cpu.setRegisterValue(Register.R10, 10n, false);
+    cpu.setRegisterValue(Register.R8W, 8n, false);
+    cpu.execute({
+        type: InstructionType.LEA,
+        operands: [{register: Register.RAX}, {
+            effectiveAddr: {
+                base: Register.R10,
+                dataSize: OperationSize.qword,
+                index: Register.R8W,
+                displacement: 0,
+                scaleFactor: 8
+            }
+        }]
+    });
+    expect(cpu.readSignedValueRegister(Register.RAX)).toBe(74n);
+});

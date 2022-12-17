@@ -1,67 +1,82 @@
-# A work-in-progress AMD64 ELF64 emulator
+# An AMD64 ELF64 Linux emulator
 
-## Why
+## What is it?
 
-While studying assembly, I was reading the AMD64 Architecture
-Programmer's manual, learning how instructions are encoded and about the 
-internal architecture of the CPU and realised I could write
-a working emulator in Javascript (well, Typescript)... so I started making one, 
-just for fun.
+This is an emulator written in Typescript that aims to run x86-64/AMD64 ELF64
+executables in browsers and Node.js, the goal is to be able to compile a program
+for Linux and run them as-is. In order to reach this goal, it should be able to
+emulate a CPU but also system calls and a terminal. I'm doing this only to learn
+how modern assembly and machine code work, therefor it will never be complete (
+it would take years of work).
 
-I know emulators already exist, it's just a learning experiment for myself.
+## Building and running
 
-## Goals
+### Compiling example assembly programs
 
-The goal is to learn more assembly and to:
+First, you need to install NASM (https://www.nasm.us/).
 
-- implement a *very small subset* of the AMD64 instruction set: arithmetic,
-  stack and procedure call instructions.
-- implement a few System V system calls (write, exit, maybe memory allocation)
-- make it work in Node.js and in the browser
+A few example programs that are guaranteed to run in the emulator are
+available in the `examples/asm` folder. In order to build them, go
+into `examples/asm` and run `./build.sh <folder_name>`, for example 
+`./build.sh add`, it will create an executable (called `executable`) in the
+`add` folder, along with the `decompiled` file and content as `hex` (they
+are used for developing the emulator).
 
-The goal is *not* to have a fully working emulator, it would take years of work,
-and I have better things to learn.
+### Running the emulator in the terminal
 
-## Done
-
-The following instructions are currently implemented:
-
-- MOV
-- XOR
-- SYSCALL
-
-These system calls are implemented:
-
-- write
-- exit
-
-
-## Build
-
+Install dependencies and compile to Javascript:
 ```
+cd lib
 npm i
-npx webpack
+npx tsc
+cd ..
 ```
 
-## Working with the library
+Run the emulator:
+
+```
+node lib/src/x64_vm_cmd.js <path_to_elf64_executable> <params>
+```
+
+For example:
+
+```
+node lib/src/x64_vm_cmd.js examples/asm/add/executable 12 36
+```
+
+This will print:
+```
+Running examples/asm/add/executable
+Process finished with code 48
+Process exited.
+```
+
+### Running in the browser
+```
+cd web
+npm i
+npm start
+```
+
+A browser window should open.
+
+## Working on the library
+
 Go inside the `lib` directory, then:
 
-### Build tests
+### Build and watch
 ```
-npx tsc -p tsconfig.test.json
+npx tsc --watch
+```
+
+### Build tests and watch
+
+```
+npx tsc -p tsconfig.test.json --watch
 ```
 
 ### Run tests
+
 ```
 npx jest
-```
-
-### Build tests, watch for changes, run tests on change
-```
-npx tsc-watch -p tsconfig.test.json --onSuccess "jest"
-```
-
-### Running the emulator in the terminal
-```
-node src/x64_vm_cmd.js {path_to_elf_file}
 ```

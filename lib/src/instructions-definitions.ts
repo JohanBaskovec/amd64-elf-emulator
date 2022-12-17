@@ -51,6 +51,13 @@ CMP reg16, reg/mem16            3B /r       Compare the contents of a 16-bit reg
 CMP reg32, reg/mem32            3B /r       Compare the contents of a 32-bit register with the contents of a 32-bit register or memory operand.
 CMP reg64, reg/mem64            3B /r       Compare the contents of a 64-bit register with the contents of a 64-bit register or memory operand.
 
+DEC reg/mem8                    FE /1       Decrement the contents of an 8-bit register or memory location by 1.
+DEC reg/mem16                   FF /1       Decrement the contents of a 16-bit register or memory location by 1.
+DEC reg/mem32                   FF /1       Decrement the contents of a 32-bit register or memory location by 1.
+DEC reg/mem64                   FF /1       Decrement the contents of a 64-bit register or memory location by 1.
+//DEC reg16                     48 +rw      Decrement the contents of a 16-bit register by 1. (See “REX Prefix” on page 14.)
+//DEC reg32                     48 +rd      Decrement the contents of a 32-bit register by 1. (See “REX Prefix” on page 14.)
+
 IDIV reg/mem8                   F6 /7       Perform signed division of AX by the contents of an 8-bit register or memory location and store the quotient in AL and the remainder in AH.
 IDIV reg/mem16                  F7 /7       Perform signed division of DX:AX by the contents of a 16-bit register or memory location and store the quotient in AX and the remainder in DX.
 IDIV reg/mem32                  F7 /7       Perform signed division of EDX:EAX by the contents of a 32-bit register or memory location and store the quotient in EAX and the remainder in EDX.
@@ -70,9 +77,144 @@ IMUL reg16, reg/mem16, imm16    69 /r iw    Multiply the contents of a 16-bit re
 IMUL reg32, reg/mem32, imm32    69 /r id    Multiply the contents of a 32-bit register or memory operand by a sign-extended immediate double and put the signed result in the 32-bit destination register.
 IMUL reg64, reg/mem64, imm32    69 /r id    Multiply the contents of a 64-bit register or memory operand by a sign-extended immediate double and put the signed result in the 64-bit destination register.
 
+INC reg/mem8                    FE /0       Increment the contents of an 8-bit register or memory location by 1.
+INC reg/mem16                   FF /0       Increment the contents of a 16-bit register or memory location by 1.
+INC reg/mem32                   FF /0       Increment the contents of a 32-bit register or memory location by 1.
+INC reg/mem64                   FF /0       Increment the contents of a 64-bit register or memory location by 1.
+//INC reg16                     40 +rw      Increment the contents of a 16-bit register by 1. (These opcodes are used as REX prefixes in 64-bit mode. See “REX Prefix” on page 14.)
+//INC reg32                     40 +rd      Increment the contents of a 32-bit register by 1. (These opcodes are used as REX prefixes in 64-bit mode. See “REX Prefix” on page 14.)
+
+JO rel8off                      70 cb       Jump if overflow (OF = 1).
+JO rel16off                     0F 80 cw    Jump if overflow (OF = 1).
+JO rel32off                     0F 80 cd    Jump if overflow (OF = 1).
+
+JNO rel8off                     71 cb       Jump if not overflow (OF = 0).
+JNO rel16off                    0F 81 cw    Jump if not overflow (OF = 0).
+JNO rel32off                    0F 81 cd    Jump if not overflow (OF = 0).
+
+JB rel8off                      72 cb       Jump if below (CF = 1).
+JB rel16off                     0F 82 cw    Jump if below (CF = 1).
+JB rel32off                     0F 82 cd    Jump if below (CF = 1).
+
+JC rel8off                      72 cb       Jump if carry (CF = 1).
+JC rel16off                     0F 82 cw    Jump if carry (CF = 1).
+JC rel32off                     0F 82 cd    Jump if carry (CF = 1).
+
+JNAE rel8off                    72 cb       Jump if not above or equal (CF = 1).
+JNAE rel16off                   0F 82 cw    Jump if not above or equal (CF = 1).
+JNAE rel32off                   0F 82 cd    Jump if not above or equal (CF = 1).
+
+JNB rel8off                     73 cb       Jump if not below (CF = 0).
+JNB rel16off                    0F 83 cw    Jump if not below (CF = 0).
+JNB rel32off                    0F 83 cd    Jump if not below (CF = 0).
+
+JNC rel8off                     73 cb       Jump if not carry (CF = 0).
+JNC rel16off                    0F 83 cw    Jump if not carry (CF = 0).
+JNC rel32off                    0F 83 cd    Jump if not carry (CF = 0).
+
+JAE rel8off                     73 cb       Jump if above or equal (CF = 0).
+JAE rel16off                    0F 83 cw    Jump if above or equal (CF = 0).
+JAE rel32off                    0F 83 cd    Jump if above or equal (CF = 0).
+
+// identical to JE, so we ignore it
+//JZ rel8off                      74 cb       Jump if zero (ZF = 1).
+//JZ rel16off                     0F 84 cw    Jump if zero (ZF = 1).
+//JZ rel32off                     0F 84 cd    Jump if zero (ZF = 1).
+
+JE rel8off                      74 cb       Jump if equal (ZF = 1).
+JE rel16off                     0F 84 cw    Jump if equal (ZF = 1).
+JE rel32off                     0F 84 cd    Jump if equal (ZF = 1).
+
+JNZ rel8off                     75 cb       Jump if not zero (ZF = 0).
+JNZ rel16off                    0F 85 cw    Jump if not zero (ZF = 0).
+JNZ rel32off                    0F 85 cd    Jump if not zero (ZF = 0).
+
+JNE rel8off                     75 cb       Jump if not equal (ZF = 0).
+JNE rel16off                    0F 85 cw    Jump if not equal (ZF = 0).
+JNE rel32off                    0F 85 cd    Jump if not equal (ZF = 0).
+
+JBE rel8off                     76 cb       Jump if below or equal (CF = 1 or ZF = 1).
+JBE rel16off                    0F 86 cw    Jump if below or equal (CF = 1 or ZF = 1).
+JBE rel32off                    0F 86 cd    Jump if below or equal (CF = 1 or ZF = 1).
+
+JNA rel8off                     76 cb       Jump if not above (CF = 1 or ZF = 1).
+JNA rel16off                    0F 86 cw    Jump if not above (CF = 1 or ZF = 1).
+JNA rel32off                    0F 86 cd    Jump if not above (CF = 1 or ZF = 1).
+
+JNBE rel8off                    77 cb       Jump if not below or equal (CF = 0 and ZF = 0).
+JNBE rel16off                   0F 87 cw    Jump if not below or equal (CF = 0 and ZF = 0).
+JNBE rel32off                   0F 87 cd    Jump if not below or equal (CF = 0 and ZF = 0).
+
+JA rel8off                      77 cb       Jump if above (CF = 0 and ZF = 0).
+JA rel16off                     0F 87 cw    Jump if above (CF = 0 and ZF = 0).
+JA rel32off                     0F 87 cd    Jump if above (CF = 0 and ZF = 0).
+
+JS rel8off                      78 cb       Jump if sign (SF = 1).
+JS rel16off                     0F 88 cw    Jump if sign (SF = 1).
+JS rel32off                     0F 88 cd    Jump if sign (SF = 1).
+
+JNS rel8off                     79 cb       Jump if not sign (SF = 0).
+JNS rel16off                    0F 89 cw    Jump if not sign (SF = 0).
+JNS rel32off                    0F 89 cd    Jump if not sign (SF = 0).
+
+JP rel8off                      7A cb       Jump if parity (PF = 1).
+JP rel16off                     0F 8A cw    Jump if parity (PF = 1).
+JP rel32off                     0F 8A cd    Jump if parity (PF = 1).
+
+JPE rel8off                     7A cb       Jump if parity even (PF = 1).
+JPE rel16off                    0F 8A cw    Jump if parity even (PF = 1).
+JPE rel32off                    0F 8A cd    Jump if parity even (PF = 1).
+
+JNP rel8off                     7B cb       Jump if not parity (PF = 0).
+JNP rel16off                    0F 8B cw    Jump if not parity (PF = 0).
+JNP rel32off                    0F 8B cd    Jump if not parity (PF = 0).
+
+JPO rel8off                     7B cb       Jump if parity odd (PF = 0).
+JPO rel16off                    0F 8B cw    Jump if parity odd (PF = 0).
+JPO rel32off                    0F 8B cd    Jump if parity odd (PF = 0).
+
+JL rel8off                      7C cb       Jump if less (SF <> OF).
+JL rel16off                     0F 8C cw    Jump if less (SF <> OF).
+JL rel32off                     0F 8C cd    Jump if less (SF <> OF).
+
+JNGE rel8off                    7C cb       Jump if not greater or equal (SF <> OF).
+JNGE rel16off                   0F 8C cw    Jump if not greater or equal (SF <> OF).
+JNGE rel32off                   0F 8C cd    Jump if not greater or equal (SF <> OF).
+
+//JNL rel8off                     7D cb       Jump if not less (SF = OF).
+//JNL rel16off                    0F 8D cw    Jump if not less (SF = OF).
+//JNL rel32off                    0F 8D cd    Jump if not less (SF = OF).
+
 JGE rel8off                     7D cb       Jump if greater or equal (SF = OF).
 JGE rel16off                    0F 8D cw    Jump if greater or equal (SF = OF).
 JGE rel32off                    0F 8D cd    Jump if greater or equal (SF = OF).
+
+//JLE rel8off                     7E cb       Jump if less or equal (ZF = 1 or SF <> OF).
+//JLE rel16off                    0F 8E cw    Jump if less or equal (ZF = 1 or SF <> OF).
+//JLE rel32off                    0F 8E cd    Jump if less or equal (ZF = 1 or SF <> OF).
+
+JNG rel8off                     7E cb       Jump if not greater (ZF = 1 or SF <> OF).
+JNG rel16off                    0F 8E cw    Jump if not greater (ZF = 1 or SF <> OF).
+JNG rel32off                    0F 8E cd    Jump if not greater (ZF = 1 or SF <> OF).
+
+//JNLE rel8off                    7F cb       Jump if not less or equal (ZF = 0 and SF = OF).
+//JNLE rel16off                   0F 8F cw    Jump if not less or equal (ZF = 0 and SF = OF).
+//JNLE rel32off                   0F 8F cd    Jump if not less or equal (ZF = 0 and SF = OF).
+
+JG rel8off                      7F cb       Jump if greater (ZF = 0 and SF = OF).
+JG rel16off                     0F 8F cw    Jump if greater (ZF = 0 and SF = OF).
+JG rel32off                     0F 8F cd    Jump if greater (ZF = 0 and SF = OF).
+
+JMP rel8off                     EB cb       Short jump with the target specified by an 8-bit signed displacement.
+JMP rel16off                    E9 cw       Near jump with the target specified by a 16-bit signed displacement.
+JMP rel32off                    E9 cd       Near jump with the target specified by a 32-bit signed displacement.
+JMP reg/mem16                   FF /4       Near jump with the target specified reg/mem16.
+JMP reg/mem32                   FF /4       Near jump with the target specified reg/mem32. (No prefix for encoding in 64-bit mode.)
+JMP reg/mem64                   FF /4       Near jump with the target specified reg/mem64.
+
+LEA reg16, mem                  8D /r       Store effective address in a 16-bit register.
+LEA reg32, mem                  8D /r       Store effective address in a 32-bit register.
+LEA reg64, mem                  8D /r       Store effective address in a 64-bit register.
 
 MOV reg/mem8, reg8              88 /r       Move the contents of an 8-bit register to an 8-bit destination register or memory operand.
 MOV reg/mem16, reg16            89 /r       Move the contents of a 16-bit register to a 16-bit destination register or memory operand.
@@ -173,6 +315,7 @@ SYSCALL                         0F 05       Call operating system.
 
 export enum OperandType {
     reg8, reg16, reg32, reg64,
+    mem,
     regOrMem8, regOrMem16, regOrMem32, regOrMem64,
     imm8, imm16, imm32, imm64,
     AL, AX, EAX, RAX,
@@ -192,6 +335,7 @@ export const operandTypeToWidth: {[key in OperandType]?: OperationSize} = {
     [OperandType.regOrMem16]: OperationSize.word,
     [OperandType.regOrMem32]: OperationSize.dword,
     [OperandType.regOrMem64]: OperationSize.qword,
+    [OperandType.mem]: OperationSize.qword,
     [OperandType.imm8]: OperationSize.byte,
     [OperandType.imm16]: OperationSize.word,
     [OperandType.imm32]: OperationSize.dword,
@@ -236,6 +380,7 @@ const operandStrToOperandType: {[operandTypeStr: string]: OperandType} = {
     'reg/mem16': OperandType.regOrMem16,
     'reg/mem32': OperandType.regOrMem32,
     'reg/mem64': OperandType.regOrMem64,
+    'mem': OperandType.mem,
     'AL': OperandType.AL,
     'AX': OperandType.AX,
     'EAX': OperandType.EAX,

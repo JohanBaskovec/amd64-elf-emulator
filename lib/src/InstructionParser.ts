@@ -230,7 +230,7 @@ export class InstructionParser {
             case OperationSize.qword:
                 if (this.instruction.operandSizeOverride) {
                     return OperationSize.word;
-                } else if (this.instruction.rex !== undefined && this.instruction.rex.w) {
+                } else if (!!this.default64OperandSize[this.instruction.type] || (this.instruction.rex !== undefined && this.instruction.rex.w)) {
                     return OperationSize.qword;
                 } else {
                     return OperationSize.dword;
@@ -524,6 +524,7 @@ export class InstructionParser {
         [InstructionType.POP]: true,
         [InstructionType.RET]: true,
         [InstructionType.CALL]: true,
+        [InstructionType.JMP]: true,
     }
 
     default64MemoryOffset: { [key in InstructionType]?: boolean } = {
@@ -694,7 +695,7 @@ export class InstructionParser {
         this.readRex();
         let instructionBeginI = this.bytei;
         for (const id of instructionDefinitions) {
-            let isTheInstruction = false;
+            let canBeTheInstruction = false;
             if (id.opCode.registerCode !== undefined) {
                 let byte = this.dv.getUint8(this.bytei);
                 this.bytei++;
@@ -702,7 +703,7 @@ export class InstructionParser {
                 if (byte >= id.opCode.bytes[0] && byte <= id.opCode.bytes[0] + 7) {
                     this.instruction.type = id.mnemonic.instructionType;
                     this.instruction.opCode = byte;
-                    isTheInstruction = true;
+                    canBeTheInstruction = true;
                     if (id.opCode.registerCode === OperationSize.byte) {
                         this.extratROperand8(id.opCode.bytes[0]);
                     } else {
@@ -717,19 +718,20 @@ export class InstructionParser {
                     let byte = this.dv.getUint8(this.bytei);
                     this.bytei++;
                     if (byte !== id.opCode.bytes[i]) {
+                        this.bytei = instructionBeginI;
                         break;
                     } else {
                         opcode |= (byte << opcodeLength);
                         opcodeLength++;
                         if (i === id.opCode.bytes.length - 1) {
                             this.instruction.type = id.mnemonic.instructionType;
-                            isTheInstruction = true;
+                            canBeTheInstruction = true;
                             this.instruction.opCode = opcode;
                         }
                     }
                 }
             }
-            if (isTheInstruction) {
+            if (canBeTheInstruction) {
                 if (this.isUnsupportedInstruction(id)) {
                     throw new Error('Instruction unsupported: ' + id.opCode.uniq);
                 }
