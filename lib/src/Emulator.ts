@@ -1,4 +1,3 @@
 export class Emulator {
-    constructor() {
-    }
+  constructor() {}
 }
